@@ -164,9 +164,14 @@ EhtConfiguration::GetTypeId()
                         MakeAttributeContainerChecker<UintegerValue>(
                             MakeUintegerChecker<uint8_t>()))))
             .AddAttribute("EnableMultiApCoordination",
-                          "Whether Multi-AP Coordination is enables.",
+                          "Whether Multi-AP Coordination is enabled.",
                           BooleanValue(false),
                           MakeBooleanAccessor(&EhtConfiguration::m_enableMultiApCoordination),
+                          MakeBooleanChecker())
+            .AddAttribute("ReliabilityMode",
+                          "Whether Multi-AP Coordination is for increasing reliability.",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&EhtConfiguration::m_reliabilityMode),
                           MakeBooleanChecker());
     return tid;
 }

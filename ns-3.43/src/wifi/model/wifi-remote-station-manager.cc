@@ -440,6 +440,7 @@ WifiRemoteStationManager::IsAssociated(Mac48Address address) const
     {
         return true;
     }
+    NS_LOG_INFO("Debug WifiRemoteStationManager::IsAssociated() state for " << address <<  " is "  << LookupState(address)->m_state);
     return LookupState(address)->m_state == WifiRemoteStationState::GOT_ASSOC_TX_OK;
 }
 
@@ -1397,11 +1398,12 @@ WifiRemoteStationManager::GetMostRecentRssi(Mac48Address address) const
 std::shared_ptr<WifiRemoteStationState>
 WifiRemoteStationManager::LookupState(Mac48Address address) const
 {
-    NS_LOG_FUNCTION(this << address);
+    // NS_LOG_FUNCTION(this << address);
     auto stateIt = m_states.find(address);
 
     if (stateIt != m_states.end())
     {
+        // NS_LOG_INFO("WifiRemoteStationManager::LookupState returning existing state");
         NS_LOG_DEBUG("WifiRemoteStationManager::LookupState returning existing state");
         return stateIt->second;
     }

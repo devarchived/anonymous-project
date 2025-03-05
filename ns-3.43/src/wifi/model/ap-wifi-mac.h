@@ -76,7 +76,8 @@ class ApWifiMac : public WifiMac
     bool SupportsSendFrom() const override;
     Ptr<WifiMacQueue> GetTxopQueue(AcIndex ac) const override;
     int64_t AssignStreams(int64_t stream) override;
-    bool EnableMultiApCoordination() const;
+    void EnableMultiApCoordination();
+    bool MultiApCoordinationEnabled() const;
 
     /**
      * Set the AP EMLSR Manager.
@@ -596,7 +597,7 @@ class ApWifiMac : public WifiMac
                                     //!< frame or between two FD frames on 2.4GHz and 5GHz links
     bool m_sendUnsolProbeResp;      //!< send unsolicited Probe Response instead of FILS Discovery
     
-    bool m_enableMultiApCoordination;
+    bool m_enableMultiApCoordination{false};
 
     /// store value and timestamp for each Buffer Status Report
     struct BsrType

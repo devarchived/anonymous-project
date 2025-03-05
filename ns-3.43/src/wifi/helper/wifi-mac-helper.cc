@@ -168,6 +168,28 @@ WifiMacHelper::Create(Ptr<WifiNetDevice> device, WifiStandard standard) const
         apMac->SetApEmlsrManager(apEmlsrManager);
     }
 
+    if (BooleanValue enableMultiApCoordination;
+        standard >= WIFI_STANDARD_80211be && staMac &&
+        device->GetEhtConfiguration()->GetAttributeFailSafe("EnableMultiApCoordination", enableMultiApCoordination) &&
+        enableMultiApCoordination.Get())
+    {
+        staMac->EnableMultiApCoordination();
+        if (BooleanValue reliabilityMode;
+            device->GetEhtConfiguration()->GetAttributeFailSafe("ReliabilityMode", reliabilityMode) &&
+            reliabilityMode.Get())
+        {
+            staMac->EnableReliabilityMode();
+        }
+    }
+
+    if (BooleanValue enableMultiApCoordination;
+        standard >= WIFI_STANDARD_80211be && apMac &&
+        device->GetEhtConfiguration()->GetAttributeFailSafe("EnableMultiApCoordination", enableMultiApCoordination) &&
+        enableMultiApCoordination.Get())
+    {
+        apMac->EnableMultiApCoordination();
+    }
+
     return mac;
 }
 

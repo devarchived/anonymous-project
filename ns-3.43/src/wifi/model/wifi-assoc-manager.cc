@@ -228,7 +228,7 @@ WifiAssocManager::ScanningTimeout()
     std::cout << "Debug WifiAssocManager::ScanningTimeout()" << std::endl;
     StaWifiMac::ApInfo bestAp;
     
-    if(m_mac->EnableMultiApCoordination())
+    if(m_mac->MultiApCoordinationEnabled())
     {
         if (m_apList.empty())
         {

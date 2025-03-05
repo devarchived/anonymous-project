@@ -182,7 +182,7 @@ main(int argc, char* argv[])
     int gi = 3200;
     std::size_t nStations{1};
     std::size_t nAPs{2};
-    std::string dlAckSeqType{"NO-OFDMA"};
+    std::string dlAckSeqType{"MU-BAR"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
     bool enableUlOfdma{false};
     bool enableBsrp{false};
     int mcs{0}; // -1 indicates an unset value
@@ -192,6 +192,8 @@ main(int argc, char* argv[])
     double minExpectedThroughput{0};
     double maxExpectedThroughput{0};
     Time accessReqInterval{0};
+    bool enableMultiApCoordination = true;
+    bool reliabilityMode = false;
 
     CommandLine cmd(__FILE__);
     cmd.AddValue(
@@ -630,6 +632,18 @@ main(int argc, char* argv[])
         wifiSta.ConfigEhtOptions("EmlsrActivated", BooleanValue(true));
     }
 
+    if (nLinksSta > 1 && enableMultiApCoordination)
+    {
+        wifiSta.ConfigEhtOptions("EnableMultiApCoordination", BooleanValue(true));
+        wifiApA.ConfigEhtOptions("EnableMultiApCoordination", BooleanValue(true));
+        wifiApB.ConfigEhtOptions("EnableMultiApCoordination", BooleanValue(true));
+    }
+
+    if(reliabilityMode)
+    {
+        wifiSta.ConfigEhtOptions("ReliabilityMode", BooleanValue(true));
+    }
+
     std::cout << "nLinksSta : " << (int)nLinksSta << std::endl;
     std::cout << "nLinksApA : " << (int)nLinksApA << std::endl;
     std::cout << "nLinksApB : " << (int)nLinksApB << std::endl;
@@ -687,7 +701,7 @@ main(int argc, char* argv[])
     phySta.Set("CcaEdThreshold", DoubleValue(ccaEdTrSta));
     phySta.Set("RxSensitivity", DoubleValue(-92.0));
 
-    mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid));
+    mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid));\
     staDevices.Add(wifiSta.Install(phySta, mac, wifiStaNodes.Get(0)));
 
     SpectrumWifiPhyHelper phyApA(nLinksApA);
@@ -787,7 +801,7 @@ main(int argc, char* argv[])
                                     TimeValue(accessReqInterval));
     }
 
-    apDevices.Add(wifiApB.Install(phyApB, mac, wifiApNodes.Get(1)));;    
+    apDevices.Add(wifiApB.Install(phyApB, mac, wifiApNodes.Get(1)));  
 
     // Set guard interval and MPDU buffer size
     Config::Set(
@@ -825,12 +839,6 @@ main(int argc, char* argv[])
     ApplicationContainer serverApp;
     ApplicationContainer clientApp;
 
-    Ipv4InterfaceContainer serverInterfaces;
-    for (std::size_t i = 0; i < nAPs; i++)
-    {
-        serverInterfaces.Add(apNodeInterface.Get(i));
-    }
-
     uint64_t maxLoad;
     // Calculate maxLoad as
     if (mcs >= 0)
@@ -863,11 +871,18 @@ main(int argc, char* argv[])
             client.SetAttribute("Interval", TimeValue(Seconds(packetInterval)));
             client.SetAttribute("PacketSize", UintegerValue(payloadSize));
             
-            for (std::size_t i = 0; i < nAPs; i++)
-            {   
-                clientApp.Add(client.Install(wifiApNodes.Get(i)));
+            if (reliabilityMode)
+            {
+                clientApp.Add(client.Install(wifiApNodes.Get(0)));
             }
-
+            else
+            {
+                for (std::size_t i = 0; i < nAPs; i++)
+                {   
+                    clientApp.Add(client.Install(wifiApNodes.Get(i)));
+                }
+            }
+            
             clientApp.Start(Seconds(1.0));
             clientApp.Stop(simulationTime + Seconds(1.0));
         }
@@ -902,7 +917,6 @@ main(int argc, char* argv[])
     auto throughput = (rxBytes * 8) / simulationTime.GetMicroSeconds(); // Mbit/s
 
     std::cout << "RxBytes : " << cumulRxBytes[0] << std::endl;
-    std::cout << "RxBytes : " << cumulRxBytes[1] << std::endl;
 
     std::cout << +mcs << "\t\t\t" << widthStr << " MHz\t\t"
                           << (widthStr.size() > 3 ? "" : "\t") << gi << " ns\t\t\t" << throughput

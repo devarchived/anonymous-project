@@ -473,6 +473,8 @@ StaWifiMac::GetMultiLinkElement(bool isReassoc, uint8_t linkId) const
     // TODO Add the MLD Capabilities and Operations subfield
     multiLinkElement.SetMldMacAddress(GetAddress());
 
+    NS_LOG_INFO("Initiating Multi-Link Element with MldMacAddress " << multiLinkElement.GetMldMacAddress() << " and linkId " << +linkId);
+
     if (m_emlsrManager) // EMLSR Manager is only installed if EMLSR is activated
     {
         multiLinkElement.SetEmlsrSupported(true);
@@ -614,7 +616,7 @@ void
 StaWifiMac::SendAssociationRequest(bool isReassoc)
 {
     std::cout << "Debug SendAssociationRequest() for number of links : " << (int)GetNLinks() << std::endl;
-    if (EnableMultiApCoordination())
+    if (MultiApCoordinationEnabled())
     {
         for (auto it = GetLinks().cbegin(); it != GetLinks().cend(); ++it)
         {
@@ -650,6 +652,7 @@ StaWifiMac::SendAssociationRequest(bool isReassoc)
             //     GetWifiRemoteStationManager(linkId)->GetMldAddress(*link.bssid).has_value())
             if (GetWifiRemoteStationManager(linkId)->GetMldAddress(*link.bssid).has_value())
             {
+                NS_LOG_INFO("Adding Multi-Link Element information");
                 auto addMle = [&](auto&& frame) {
                     frame.template Get<MultiLinkElement>() = GetMultiLinkElement(isReassoc, linkId);
                 };
@@ -896,6 +899,8 @@ StaWifiMac::ScanningTimeout(const std::optional<ApInfo>& bestAp)
     for (const auto& [localLinkId, apLinkId, bssid] : bestAp->m_setupLinks)
     {
         NS_ASSERT_MSG(mle, "We get here only for ML setup");
+        NS_LOG_INFO("Setting up link (local ID=" << +localLinkId << ", AP ID=" << +apLinkId
+                                                  << ")");
         NS_LOG_DEBUG("Setting up link (local ID=" << +localLinkId << ", AP ID=" << +apLinkId
                                                   << ")");
         GetLink(localLinkId).bssid = bssid;
@@ -949,6 +954,7 @@ StaWifiMac::ScanningTimeoutMultiAp(std::list<ApInfo> apList)
     for (auto ap = apList.begin(); ap != apList.end(); ++ap)
     {
         std::cout << "Debug ScanningTimeoutMultiAp() adding AP with MAC Address : " << ap->m_apAddr << std::endl;
+        NS_LOG_INFO("Adding AP with MAC Address : " << ap->m_apAddr);
         UpdateApInfo(ap->m_frame, ap->m_apAddr, ap->m_bssid, ap->m_linkId);
     } 
     // reset info on links to setup
@@ -979,22 +985,31 @@ StaWifiMac::ScanningTimeoutMultiAp(std::list<ApInfo> apList)
             NS_ASSERT_MSG(mle, "We get here only for ML setup");
             NS_LOG_DEBUG("Setting up link (local ID=" << +localLinkId << ", AP ID=" << +apLinkId
                                                     << ")");
-            std::cout << "Setting up link (local ID=" << (int)localLinkId << ", AP ID=" << (int)apLinkId << ")" << std::endl;
-            if(EnableMultiApCoordination()!=true)
+            NS_LOG_INFO("Setting up link (local ID=" << +localLinkId << ", AP ID=" << +apLinkId
+                                                  << ")");
+            if(MultiApCoordinationEnabled() != true)
             {
                 GetLink(localLinkId).bssid = bssid;
+                if (!mleCommonInfo)
+                {
+                    mleCommonInfo = std::make_shared<CommonInfoBasicMle>(mle->GetCommonInfoBasic());
+                }
             }
-            if (!mleCommonInfo)
+            else
             {
                 mleCommonInfo = std::make_shared<CommonInfoBasicMle>(mle->GetCommonInfoBasic());
             }
+            
+            NS_LOG_INFO("AddStationMleCommonInfo (" << +localLinkId << "," << bssid << "," << mleCommonInfo->m_mldMacAddress << ")");
             GetWifiRemoteStationManager(localLinkId)->AddStationMleCommonInfo(bssid, mleCommonInfo);
             swapInfo.emplace(localLinkId, apLinkId);
         }
     }
 
-    // std::cout << "Debug StaWifiMac::ScanningTimeoutMultiAp() SwapLinks()" << std::endl;
-    // SwapLinks(swapInfo);
+    if (!MultiApCoordinationEnabled())
+    {
+    SwapLinks(swapInfo);
+    }
 
     // lambda to get beacon interval from Beacon or Probe Response
     auto getBeaconInterval = [](auto&& frame) {
@@ -1101,6 +1116,7 @@ StaWifiMac::RestartBeaconWatchdog(Time delay)
 bool
 StaWifiMac::IsAssociated() const
 {
+    // std::cout << "Debug StaWifiMac::IsAssociated() in state " << (uint)m_state << std::endl;
     return m_state == ASSOCIATED;
 }
 
@@ -1148,6 +1164,8 @@ StaWifiMac::DoGetLocalAddress(const Mac48Address& remoteAddr) const
 bool
 StaWifiMac::CanForwardPacketsTo(Mac48Address to) const
 {
+    NS_LOG_FUNCTION(this << to);
+    std::cout << "Debug StaWifiMac::CanForwardPacketsTo() as " << IsAssociated() << std::endl;
     return IsAssociated();
 }
 
@@ -1168,19 +1186,68 @@ StaWifiMac::Enqueue(Ptr<WifiMpdu> mpdu, Mac48Address to, Mac48Address from)
     // the Receiver Address (RA) and the Transmitter Address (TA) are the MLD addresses only for
     // non-broadcast data frames exchanged between two MLDs
     auto linkIds = GetSetupLinkIds();
+    NS_LOG_INFO("SetupLinkIds size : " << linkIds.size());
     NS_ASSERT(!linkIds.empty());
+
     uint8_t linkId = *linkIds.begin();
-    const auto apMldAddr = GetWifiRemoteStationManager(linkId)->GetMldAddress(GetBssid(linkId));
+    auto apMldAddr = GetWifiRemoteStationManager(linkId)->GetMldAddress(GetBssid(linkId));
+    NS_LOG_INFO("apMldAddr for link " << +linkId << " is " << *apMldAddr);
+    
+    if(MultiApCoordinationEnabled())
+    {
+        if (ReliabilityModeEnabled())
+        {
+            for (const auto& linkId : linkIds)
+            {
+                apMldAddr = GetWifiRemoteStationManager(linkId)->GetMldAddress(GetBssid(linkId));
 
-    hdr.SetAddr1(apMldAddr.value_or(GetBssid(linkId)));
-    hdr.SetAddr2(apMldAddr ? GetAddress() : GetFrameExchangeManager(linkId)->GetAddress());
-    hdr.SetAddr3(to);
-    hdr.SetDsNotFrom();
-    hdr.SetDsTo();
+                hdr.SetAddr1(apMldAddr.value_or(GetBssid(linkId)));
+                hdr.SetAddr2(apMldAddr ? GetAddress() : GetFrameExchangeManager(linkId)->GetAddress());
+                hdr.SetAddr3(to);
+                hdr.SetDsNotFrom();
+                hdr.SetDsTo();
 
-    auto txop = hdr.IsQosData() ? StaticCast<Txop>(GetQosTxop(hdr.GetQosTid())) : GetTxop();
-    NS_ASSERT(txop);
-    txop->Queue(mpdu);
+                auto txop = hdr.IsQosData() ? StaticCast<Txop>(GetQosTxop(hdr.GetQosTid())) : GetTxop();
+                NS_ASSERT(txop);
+                txop->Queue(mpdu);
+            }
+        }
+        else 
+        {
+            for (const auto& modLinkId : linkIds)
+            {
+                apMldAddr = GetWifiRemoteStationManager(modLinkId)->GetMldAddress(GetBssid(modLinkId));
+                if (apMldAddr && to == *apMldAddr)
+                {
+                    NS_LOG_INFO("Corrected apMldAddr for link " << +modLinkId << " is " << *apMldAddr);
+                    linkId = modLinkId;
+                    break;
+                }
+            }
+
+            hdr.SetAddr1(apMldAddr.value_or(GetBssid(linkId)));
+            hdr.SetAddr2(apMldAddr ? GetAddress() : GetFrameExchangeManager(linkId)->GetAddress());
+            hdr.SetAddr3(to);
+            hdr.SetDsNotFrom();
+            hdr.SetDsTo();
+
+            auto txop = hdr.IsQosData() ? StaticCast<Txop>(GetQosTxop(hdr.GetQosTid())) : GetTxop();
+            NS_ASSERT(txop);
+            txop->Queue(mpdu);
+        }
+    }
+    else 
+    {
+        hdr.SetAddr1(apMldAddr.value_or(GetBssid(linkId)));
+        hdr.SetAddr2(apMldAddr ? GetAddress() : GetFrameExchangeManager(linkId)->GetAddress());
+        hdr.SetAddr3(to);
+        hdr.SetDsNotFrom();
+        hdr.SetDsTo();
+
+        auto txop = hdr.IsQosData() ? StaticCast<Txop>(GetQosTxop(hdr.GetQosTid())) : GetTxop();
+        NS_ASSERT(txop);
+        txop->Queue(mpdu);
+    }
 }
 
 void
@@ -1293,11 +1360,13 @@ StaWifiMac::Receive(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
             }
             else
             {
+                NS_LOG_INFO("forwarding frame from=" << hdr->GetAddr3() << ", to=" << hdr->GetAddr1());
                 ForwardUp(packet, hdr->GetAddr3(), hdr->GetAddr1());
             }
         }
         else
         {
+            NS_LOG_INFO("forwarding frame from=" << hdr->GetAddr3() << ", to=" << hdr->GetAddr1());
             ForwardUp(packet, hdr->GetAddr3(), hdr->GetAddr1());
         }
         return;
@@ -1403,6 +1472,7 @@ StaWifiMac::ReceiveBeacon(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
     }
     else
     {
+        NS_LOG_INFO("Beacon received from " << hdr.GetAddr2());
         NS_LOG_DEBUG("Beacon received from " << hdr.GetAddr2());
         m_assocManager->NotifyApInfo(std::move(apInfo));
     }
@@ -1436,16 +1506,14 @@ StaWifiMac::ReceiveProbeResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
 void
 StaWifiMac::ReceiveAssocResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
 {
-    std::cout << "Debug StaWifiMac::ReceiveAssocResp()" << std::endl;
-
     NS_LOG_FUNCTION(this << *mpdu << +linkId);
     const WifiMacHeader& hdr = mpdu->GetHeader();
     NS_ASSERT(hdr.IsAssocResp() || hdr.IsReassocResp());
 
-    if (m_state != WAIT_ASSOC_RESP)
-    {
-        return;
-    }
+    // if (m_state != WAIT_ASSOC_RESP)
+    // {
+    //     return;
+    // }
 
     std::optional<Mac48Address> apMldAddress;
     MgtAssocResponseHeader assocResp;
@@ -1458,6 +1526,7 @@ StaWifiMac::ReceiveAssocResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
     {
         m_aid = assocResp.GetAssociationId();
         NS_LOG_DEBUG((hdr.IsReassocResp() ? "reassociation done" : "association completed"));
+        NS_LOG_INFO((hdr.IsReassocResp() ? "reassociation done" : "association completed") << " on link " << +linkId);
         UpdateApInfo(assocResp, hdr.GetAddr2(), hdr.GetAddr3(), linkId);
         NS_ASSERT(GetLink(linkId).bssid.has_value() && *GetLink(linkId).bssid == hdr.GetAddr3());
         SetBssid(hdr.GetAddr3(), linkId);
@@ -1467,6 +1536,7 @@ StaWifiMac::ReceiveAssocResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
             // this is an ML setup, trace the setup link
             m_setupCompleted(linkId, hdr.GetAddr3());
             apMldAddress = GetWifiRemoteStationManager(linkId)->GetMldAddress(hdr.GetAddr3());
+            NS_LOG_INFO("AP MLD Address on link " << +linkId << " with address " << hdr.GetAddr3() << " is " << *apMldAddress);
             NS_ASSERT(apMldAddress);
 
             if (const auto& mldCapabilities =
@@ -1534,13 +1604,14 @@ StaWifiMac::ReceiveAssocResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
         // if a Multi-Link Element is present, check its content
         if (const auto& mle = assocResp.Get<MultiLinkElement>())
         {
-            std::cout << "Debug linkId = " << (int)linkId << " and stored link Id = " << (int)mle->GetLinkIdInfo()<< std::endl;
             NS_ABORT_MSG_IF(!GetLink(linkId).bssid.has_value(),
                             "The link on which the Association Response was received "
                             "is not a link we requested to setup");
-            NS_ABORT_MSG_IF(linkId != mle->GetLinkIdInfo(),
-                            "The link ID of the AP that transmitted the Association "
-                            "Response does not match the stored link ID");
+            NS_LOG_INFO("ABORT!! " << +linkId << " != " << +mle->GetLinkIdInfo());
+            // NS_ABORT_MSG_IF(linkId != mle->GetLinkIdInfo(),
+            //                 "The link ID of the AP that transmitted the Association "
+            //                 "Response does not match the stored link ID");
+            // NS_LOG_INFO("ABORT!! Mismatch for address stored in station manager for link " << +linkId <<  " with " << GetWifiRemoteStationManager(linkId)->GetMldAddress(hdr.GetAddr2()).value() << " != " << mle->GetMldMacAddress() << " as AP MLD MAC Address");
             NS_ABORT_MSG_IF(GetWifiRemoteStationManager(linkId)->GetMldAddress(hdr.GetAddr2()) !=
                                 mle->GetMldMacAddress(),
                             "The AP MLD MAC address in the received Multi-Link Element does not "
@@ -1589,7 +1660,7 @@ StaWifiMac::ReceiveAssocResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
             }
         }
         
-        if (EnableMultiApCoordination() != true)
+        if (MultiApCoordinationEnabled() != true)
         {
             // remaining links in setupLinks are not setup and hence must be disabled
             for (const auto& id : setupLinks)
@@ -1632,6 +1703,8 @@ StaWifiMac::ReceiveAssocResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
     }
 
     SetPmModeAfterAssociation(linkId);
+
+    std::cout << "Debug StaWifiMac::ReceiveAssocResp() in state " << (int)m_state << std::endl;
 }
 
 void
@@ -2280,10 +2353,28 @@ operator<<(std::ostream& os, const StaWifiMac::ApInfo& apInfo)
     return os;
 }
 
+void
+StaWifiMac::EnableMultiApCoordination()
+{
+    m_enableMultiApCoordination = true;
+}
+
 bool
-StaWifiMac::EnableMultiApCoordination() const
+StaWifiMac::MultiApCoordinationEnabled() const
 {
     return m_enableMultiApCoordination;
+}
+
+void
+StaWifiMac::EnableReliabilityMode()
+{
+    m_reliabilityMode = true;
+}
+
+bool
+StaWifiMac::ReliabilityModeEnabled() const
+{
+    return m_reliabilityMode;
 }
 
 } // namespace ns3

@@ -114,6 +114,7 @@ class EhtConfiguration : public Object
         m_linkMappingUl; //!< TIDs-indexed Link Mapping for uplink
 
     bool m_enableMultiApCoordination;
+    bool m_reliabilityMode;
 };
 
 } // namespace ns3

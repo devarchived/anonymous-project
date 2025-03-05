@@ -391,7 +391,7 @@ MultiLinkElement::SetMldMacAddress(Mac48Address address)
 Mac48Address
 MultiLinkElement::GetMldMacAddress() const
 {
-    NS_LOG_FUNCTION(this);
+    // NS_LOG_FUNCTION(this);
 
     return std::get<BASIC_VARIANT>(m_commonInfo).m_mldMacAddress;
 }
@@ -415,7 +415,7 @@ MultiLinkElement::HasLinkIdInfo() const
 uint8_t
 MultiLinkElement::GetLinkIdInfo() const
 {
-    NS_LOG_FUNCTION(this);
+    // NS_LOG_FUNCTION(this);
 
     return std::get<BASIC_VARIANT>(m_commonInfo).m_linkIdInfo.value();
 }
@@ -676,7 +676,7 @@ MultiLinkElement::PerStaProfileSubelement::SetStaMacAddress(Mac48Address address
 bool
 MultiLinkElement::PerStaProfileSubelement::HasStaMacAddress() const
 {
-    NS_LOG_FUNCTION(this);
+    // NS_LOG_FUNCTION(this);
 
     return (m_staControl & 0x0020) != 0;
 }
@@ -684,7 +684,7 @@ MultiLinkElement::PerStaProfileSubelement::HasStaMacAddress() const
 Mac48Address
 MultiLinkElement::PerStaProfileSubelement::GetStaMacAddress() const
 {
-    NS_LOG_FUNCTION(this);
+    // NS_LOG_FUNCTION(this);
 
     NS_ABORT_IF(!HasStaMacAddress());
     return m_staMacAddress;

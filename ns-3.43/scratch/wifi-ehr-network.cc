@@ -164,7 +164,7 @@ main(int argc, char* argv[])
     int gi = 3200;
     std::size_t nStations{1};
     std::size_t nAPs{1};
-    std::string dlAckSeqType{"NO-OFDMA"};
+    std::string dlAckSeqType{"MU-BAR"};
     bool enableUlOfdma{false};
     bool enableBsrp{false};
     int mcs{0}; // -1 indicates an unset value
@@ -501,9 +501,9 @@ main(int argc, char* argv[])
     InternetStackHelper stack;
     stack.Install(wifiApNode);
     stack.Install(wifiStaNodes);
-    streamNumber += stack.AssignStreams(wifiApNode, streamNumber);
+    // streamNumber += stack.AssignStreams(wifiApNode, streamNumber);
     // streamNumber += stack.AssignStreams(wifiApNode2, streamNumber);
-    streamNumber += stack.AssignStreams(wifiStaNodes, streamNumber);
+    // streamNumber += stack.AssignStreams(wifiStaNodes, streamNumber);
 
     Ipv4AddressHelper address;
     address.SetBase("192.168.1.0", "255.255.255.0");

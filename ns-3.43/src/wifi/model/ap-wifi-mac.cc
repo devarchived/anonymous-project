@@ -406,6 +406,7 @@ ApWifiMac::UpdateShortPreambleEnabled(uint8_t linkId)
 bool
 ApWifiMac::CanForwardPacketsTo(Mac48Address to) const
 {
+    NS_LOG_FUNCTION(this << to);
     return (to.IsGroup() || IsAssociated(to));
 }
 
@@ -729,6 +730,8 @@ ApWifiMac::GetMultiLinkElement(uint8_t linkId, WifiMacType frameType, const Mac4
     mle.SetMldMacAddress(GetAddress());
     mle.SetLinkIdInfo(linkId);
     mle.SetBssParamsChangeCount(0);
+
+    NS_LOG_INFO("Initiating Multi-Link Element with MldMacAddress " << mle.GetMldMacAddress() << " and linkId " << +linkId);
 
     auto ehtConfiguration = GetEhtConfiguration();
     NS_ASSERT(ehtConfiguration);
@@ -1232,6 +1235,8 @@ ApWifiMac::GetLinkIdStaAddrMap(MgtAssocResponseHeader& assoc,
                                const Mac48Address& to,
                                uint8_t linkId)
 {
+    NS_LOG_FUNCTION(this << to << +linkId);
+
     // find all the links to setup (i.e., those for which status code is success)
     std::map<uint8_t /* link ID */, Mac48Address> linkIdStaAddrMap;
 
@@ -1245,6 +1250,7 @@ ApWifiMac::GetLinkIdStaAddrMap(MgtAssocResponseHeader& assoc,
         const auto staMldAddress = GetWifiRemoteStationManager(linkId)->GetMldAddress(to);
         NS_ABORT_MSG_IF(!staMldAddress.has_value(),
                         "Sending a Multi-Link Element to a single link device");
+        NS_LOG_INFO("Checking STA with MLD address " << *GetWifiRemoteStationManager(linkId)->GetMldAddress(to));
         for (std::size_t idx = 0; idx < mle->GetNPerStaProfileSubelements(); idx++)
         {
             auto& perStaProfile = mle->GetPerStaProfile(idx);
@@ -1260,6 +1266,7 @@ ApWifiMac::GetLinkIdStaAddrMap(MgtAssocResponseHeader& assoc,
                 NS_ABORT_MSG_IF(!inserted,
                                 "More than one Association Response to MLD "
                                     << *staMldAddress << " on link ID " << +otherLinkId);
+                NS_LOG_INFO("Inserted " << *staMldAddress << " on link ID " << +otherLinkId);
             }
         }
     }
@@ -1270,6 +1277,8 @@ ApWifiMac::GetLinkIdStaAddrMap(MgtAssocResponseHeader& assoc,
 void
 ApWifiMac::SetAid(MgtAssocResponseHeader& assoc, const LinkIdStaAddrMap& linkIdStaAddrMap)
 {
+    NS_LOG_FUNCTION(this);
+
     if (linkIdStaAddrMap.empty())
     {
         // no link to setup, nothing to do
@@ -1287,6 +1296,7 @@ ApWifiMac::SetAid(MgtAssocResponseHeader& assoc, const LinkIdStaAddrMap& linkIdS
         if (const auto aid = link->stationManager->GetAssociationId(addr); aid != SU_STA_ID)
         {
             aids.insert(aid);
+            NS_LOG_INFO("Inserting AID " << aid << " on link ID " << +id);
         }
     }
 
@@ -1358,7 +1368,6 @@ void
 ApWifiMac::SendAssocResp(Mac48Address to, bool isReassoc, uint8_t linkId)
 {
     NS_LOG_FUNCTION(this << to << isReassoc << +linkId);
-    std::cout << "Debug ApWifiMac::SendAssocResp()" << std::endl;
 
     WifiMacHeader hdr;
     hdr.SetType(isReassoc ? WIFI_MAC_MGT_REASSOCIATION_RESPONSE
@@ -1610,6 +1619,7 @@ ApWifiMac::TxOk(Ptr<const WifiMpdu> mpdu)
 
         if (GetWifiRemoteStationManager(*linkId)->IsWaitAssocTxOk(hdr.GetAddr1()))
         {
+            NS_LOG_INFO("AP=" << hdr.GetAddr2() << " associated with STA=" << hdr.GetAddr1());
             NS_LOG_DEBUG("AP=" << hdr.GetAddr2() << " associated with STA=" << hdr.GetAddr1());
             GetWifiRemoteStationManager(*linkId)->RecordGotAssocTxOk(hdr.GetAddr1());
         }
@@ -1636,6 +1646,8 @@ ApWifiMac::TxOk(Ptr<const WifiMpdu> mpdu)
                     staAddress.has_value() && i != *linkId &&
                     stationManager->IsWaitAssocTxOk(*staAddress))
                 {
+                    NS_LOG_INFO("AP=" << GetFrameExchangeManager(i)->GetAddress()
+                                       << " associated with STA=" << *staAddress);
                     NS_LOG_DEBUG("AP=" << GetFrameExchangeManager(i)->GetAddress()
                                        << " associated with STA=" << *staAddress);
                     stationManager->RecordGotAssocTxOk(*staAddress);
@@ -1736,7 +1748,9 @@ ApWifiMac::StaSwitchingToPsMode(const Mac48Address& staAddr, uint8_t linkId)
 
     // Block frames addressed to the STA in PS mode
     NS_LOG_DEBUG("Block destination " << staAddr << " on link " << +linkId);
+    NS_LOG_INFO("Block destination " << staAddr << " on link " << +linkId);
     auto staMldAddr = GetWifiRemoteStationManager(linkId)->GetMldAddress(staAddr).value_or(staAddr);
+    NS_LOG_INFO("Apasih " << staMldAddr << " on link " << +linkId);
     BlockUnicastTxOnLinks(WifiQueueBlockedReason::POWER_SAVE_MODE, staMldAddr, {linkId});
 }
 
@@ -1760,13 +1774,16 @@ ApWifiMac::StaSwitchingToActiveModeOrDeassociated(const Mac48Address& staAddr, u
 std::optional<uint8_t>
 ApWifiMac::IsAssociated(const Mac48Address& address) const
 {
+    NS_LOG_FUNCTION(this << address);
     for (uint8_t linkId = 0; linkId < GetNLinks(); linkId++)
     {
         if (GetWifiRemoteStationManager(linkId)->IsAssociated(address))
         {
+            NS_LOG_INFO(address << " is associated");
             return linkId;
         }
     }
+    NS_LOG_INFO(address << " is not associated");
     NS_LOG_DEBUG(address << " is not associated");
     return std::nullopt;
 }
@@ -1815,6 +1832,7 @@ ApWifiMac::Receive(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
             if (to == GetAddress() ||
                 (hdr->IsQosData() && hdr->IsQosAmsdu() && to == mpdu->GetHeader().GetAddr1()))
             {
+                NS_LOG_INFO("frame for me from=" << from);
                 NS_LOG_DEBUG("frame for me from=" << from);
                 if (hdr->IsQosData())
                 {
@@ -1838,6 +1856,7 @@ ApWifiMac::Receive(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
             else if (to.IsGroup() || IsAssociated(to))
             {
                 NS_LOG_DEBUG("forwarding frame from=" << from << ", to=" << to);
+                NS_LOG_INFO("forwarding frame from=" << from << ", to=" << to);
                 Ptr<Packet> copy = packet->Copy();
 
                 // If the frame we are forwarding is of type QoS Data,
@@ -1913,6 +1932,9 @@ ApWifiMac::Receive(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
             case WIFI_MAC_MGT_ASSOCIATION_REQUEST:
             case WIFI_MAC_MGT_REASSOCIATION_REQUEST: {
                 NS_LOG_DEBUG(((hdr->IsAssocReq()) ? "Association" : "Reassociation")
+                             << " request received from " << from
+                             << ((GetNLinks() > 0) ? " on link ID " + std::to_string(linkId) : ""));
+                NS_LOG_INFO(((hdr->IsAssocReq()) ? "Association" : "Reassociation")
                              << " request received from " << from
                              << ((GetNLinks() > 0) ? " on link ID " + std::to_string(linkId) : ""));
 
@@ -2256,6 +2278,7 @@ ApWifiMac::ReceiveAssocRequest(const AssocReqRefVariant& assoc,
         }
 
         NS_LOG_DEBUG("Association Request from " << from << " accepted");
+        NS_LOG_INFO("Association Request from " << from << " accepted");
         remoteStationManager->RecordWaitAssocTxOk(from);
         return true;
     };
@@ -2288,26 +2311,61 @@ ApWifiMac::ParseReportedStaInfo(const AssocReqRefVariant& assoc, Mac48Address fr
             {
                 NS_LOG_DEBUG("[i=" << i
                                    << "] Cannot setup a link if the STA MAC address is missing");
+                NS_LOG_INFO("[i=" << i
+                                   << "] Cannot setup a link if the STA MAC address is missing");
                 continue;
             }
             uint8_t newLinkId = perStaProfile.GetLinkId();
-            if (newLinkId == linkId || newLinkId >= GetNLinks())
+            if (!MultiApCoordinationEnabled())
             {
-                NS_LOG_DEBUG("[i=" << i << "] Link ID " << newLinkId << " not valid");
-                continue;
+                if (newLinkId == linkId || newLinkId >= GetNLinks())
+                {
+                    NS_LOG_DEBUG("[i=" << i << "] Link ID " << +newLinkId << " not valid");
+                    NS_LOG_INFO("[i=" << i << "] Link ID " << +newLinkId << " not valid");
+                    continue;
+                }
             }
             if (!perStaProfile.HasAssocRequest() && !perStaProfile.HasReassocRequest())
             {
                 NS_LOG_DEBUG("[i=" << i << "] No (Re)Association Request frame body present");
+                NS_LOG_INFO("[i=" << i << "] No (Re)Association Request frame body present");
                 continue;
             }
 
-            ReceiveAssocRequest(perStaProfile.GetAssocRequest(),
+            if (MultiApCoordinationEnabled())
+            {
+                if (newLinkId == linkId)
+                {
+                    ReceiveAssocRequest(perStaProfile.GetAssocRequest(),
                                 perStaProfile.GetStaMacAddress(),
                                 newLinkId);
-            GetWifiRemoteStationManager(newLinkId)->AddStationMleCommonInfo(
-                perStaProfile.GetStaMacAddress(),
-                mleCommonInfo);
+                    GetWifiRemoteStationManager(newLinkId)->AddStationMleCommonInfo(
+                        perStaProfile.GetStaMacAddress(),
+                        mleCommonInfo);
+                    NS_LOG_INFO("ParseReportedStaInfo for link " << +newLinkId << " for STA " << perStaProfile.GetStaMacAddress());
+                }
+                else 
+                {
+                    ReceiveAssocRequest(perStaProfile.GetAssocRequest(),
+                                perStaProfile.GetStaMacAddress(),
+                                linkId);
+                    GetWifiRemoteStationManager(linkId)->AddStationMleCommonInfo(
+                        perStaProfile.GetStaMacAddress(),
+                        mleCommonInfo);
+                    NS_LOG_INFO("ParseReportedStaInfo for link " << +linkId << " for STA " << perStaProfile.GetStaMacAddress());
+                }
+            }
+            else 
+            {
+                ReceiveAssocRequest(perStaProfile.GetAssocRequest(),
+                                perStaProfile.GetStaMacAddress(),
+                                newLinkId);
+                GetWifiRemoteStationManager(newLinkId)->AddStationMleCommonInfo(
+                    perStaProfile.GetStaMacAddress(),
+                    mleCommonInfo);
+                NS_LOG_INFO("ParseReportedStaInfo for link " << +newLinkId << " for STA " << perStaProfile.GetStaMacAddress());
+            }
+            
         }
     };
 
@@ -2592,9 +2650,15 @@ ApWifiMac::GetMaxBufferStatus(Mac48Address address) const
 }
 
 bool
-ApWifiMac::EnableMultiApCoordination() const
+ApWifiMac::MultiApCoordinationEnabled() const
 {
     return m_enableMultiApCoordination;
+}
+
+void
+ApWifiMac::EnableMultiApCoordination()
+{
+    m_enableMultiApCoordination = true;
 }
 
 } // namespace ns3

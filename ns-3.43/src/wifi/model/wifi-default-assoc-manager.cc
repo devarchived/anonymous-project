@@ -111,7 +111,6 @@ void
 WifiDefaultAssocManager::EndScanning()
 {
     NS_LOG_FUNCTION(this);
-    std::cout << "Debug EndScanning()" << std::endl;
     OptMleConstRef mle;
     OptRnrConstRef rnr;
     std::list<WifiAssocManager::RnrLinkInfo> apList;
@@ -119,11 +118,36 @@ WifiDefaultAssocManager::EndScanning()
     // If multi-link setup is not possible, just call ScanningTimeout() and return
     if (!CanSetupMultiLink(mle, rnr) || (apList = GetAllAffiliatedAps(*rnr)).empty())
     {   
-        std::cout << "Debug EndScanning() does not support multi-link" << std::endl;
+        NS_LOG_INFO ("Debug EndScanning() does not support multi-link");
+        if (GetSortedList().size() > 1 && m_mac->MultiApCoordinationEnabled())
+        {
+            NS_LOG_INFO("Size of the apList : " << GetSortedList().size());
+            
+            for (auto& ap : GetSortedList())
+            {
+                auto& setupLinks = GetSetupLinks(ap);
+
+                setupLinks.clear();
+
+                if(ap.m_linkId != mle->get().GetLinkIdInfo())
+                {
+                    setupLinks.emplace_back(StaWifiMac::ApInfo::SetupLinksInfo{ap.m_linkId,
+                                                                ap.m_linkId,
+                                                                ap.m_bssid});
+                    NS_LOG_INFO("Added to setup links (" << +ap.m_linkId << ", " << +ap.m_linkId << ", " << ap.m_bssid << ")");
+                }
+                else
+                {
+                    setupLinks.emplace_back(StaWifiMac::ApInfo::SetupLinksInfo{ap.m_linkId,
+                                                                mle->get().GetLinkIdInfo(),
+                                                                ap.m_bssid});
+                    NS_LOG_INFO("Added to setup links (" << +ap.m_linkId << ", " << +mle->get().GetLinkIdInfo() << ", " << ap.m_bssid << ")");
+                }
+            }  
+        }
         ScanningTimeout();
         return;
     }
-    std::cout << "Debug EndScanning() Size of the list : " << apList.size() << std::endl;
 
     auto& bestAp = *GetSortedList().begin();
     auto& setupLinks = GetSetupLinks(bestAp);
@@ -132,6 +156,7 @@ WifiDefaultAssocManager::EndScanning()
     setupLinks.emplace_back(StaWifiMac::ApInfo::SetupLinksInfo{bestAp.m_linkId,
                                                                mle->get().GetLinkIdInfo(),
                                                                bestAp.m_bssid});
+    NS_LOG_INFO("Added to setup links (" << +bestAp.m_linkId << ", " << +mle->get().GetLinkIdInfo() << ", " << bestAp.m_bssid << ")");
 
     // sort local PHY objects so that radios with constrained PHY band comes first,
     // then radios with no constraint
@@ -198,6 +223,7 @@ WifiDefaultAssocManager::EndScanning()
                 linkId,
                 rnr->get().GetLinkId(apIt->m_nbrApInfoId, apIt->m_tbttInfoFieldId),
                 bssid});
+            NS_LOG_INFO("Added to setup links (" << +linkId << ", " << +rnr->get().GetLinkId(apIt->m_nbrApInfoId, apIt->m_tbttInfoFieldId) << ", " << bssid << ")");
 
             if (needChannelSwitch)
             {
@@ -216,7 +242,7 @@ WifiDefaultAssocManager::EndScanning()
                 }
 
                 NS_LOG_DEBUG("Switch link " << +linkId << " to using " << apChannel);
-                if(m_mac->EnableMultiApCoordination() != true)
+                if(m_mac->MultiApCoordinationEnabled() != true)
                 {
                     phy->SetOperatingChannel(apChannel);
                     // actual channel switching may be delayed, thus setup a channel switch timer

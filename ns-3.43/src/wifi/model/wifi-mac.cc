@@ -1519,6 +1519,7 @@ WifiMac::ApplyTidLinkMapping(const Mac48Address& mldAddr, WifiDirection dir)
         // unblock mapped links
         NS_ABORT_MSG_IF(mappedLinks.empty(), "Every TID must be mapped to at least a link");
 
+        NS_LOG_INFO("Unblock queues to DA = " << mldAddr << " from SA = " << GetAddress());
         m_scheduler->UnblockQueues(WifiQueueBlockedReason::TID_NOT_MAPPED,
                                    QosUtilsMapTidToAc(tid),
                                    {WIFI_QOSDATA_QUEUE},
@@ -1530,6 +1531,7 @@ WifiMac::ApplyTidLinkMapping(const Mac48Address& mldAddr, WifiDirection dir)
         // block unmapped links
         if (!notMappedLinks.empty())
         {
+            std::cout << "Ada masuk sini ga ya" << std::endl;
             m_scheduler->BlockQueues(WifiQueueBlockedReason::TID_NOT_MAPPED,
                                      QosUtilsMapTidToAc(tid),
                                      {WIFI_QOSDATA_QUEUE},
@@ -1561,6 +1563,7 @@ WifiMac::BlockUnicastTxOnLinks(WifiQueueBlockedReason reason,
 
         if (link.stationManager->GetMldAddress(address) == address && linkAddr == address)
         {
+            NS_LOG_INFO("Link " << +linkId << " has not been setup with the MLD, skip");
             NS_LOG_DEBUG("Link " << +linkId << " has not been setup with the MLD, skip");
             continue;
         }

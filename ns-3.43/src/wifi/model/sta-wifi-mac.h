@@ -178,7 +178,10 @@ class StaWifiMac : public WifiMac
 
     bool CanForwardPacketsTo(Mac48Address to) const override;
     int64_t AssignStreams(int64_t stream) override;
-    bool EnableMultiApCoordination() const;
+    void EnableMultiApCoordination();
+    bool MultiApCoordinationEnabled() const;
+    void EnableReliabilityMode();
+    bool ReliabilityModeEnabled() const;
 
     /**
      * \param phys the physical layers attached to this MAC.
@@ -622,7 +625,9 @@ class StaWifiMac : public WifiMac
     /// TracedCallback signature for link setup completed/canceled events
     using LinkSetupCallback = void (*)(uint8_t /* link ID */, Mac48Address /* AP address */);
 
-    bool m_enableMultiApCoordination{true};
+    bool m_enableMultiApCoordination{false};
+    bool m_reliabilityMode {false};
+    
 };
 
 /**
