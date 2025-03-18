@@ -1132,6 +1132,7 @@ EhtFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
 
     const auto& hdr = mpdu->GetHeader();
 
+    // iasasjsiasjiisjais
     if (m_apMac)
     {
         // if the AP MLD received an MPDU from an EMLSR client that is starting an UL TXOP,
@@ -1197,6 +1198,53 @@ EhtFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
     {
         NS_LOG_DEBUG("Dropping " << *mpdu << " received by an aux PHY on link " << +m_linkId);
         return;
+    }
+
+    if((hdr.IsData() || hdr.IsQosData()) && m_mac->ReliabilityModeEnabled())
+    {
+        uint32_t rxCount = 0;
+        auto& rxQueue = m_mac->GetRxQueue();
+        std::vector<ns3::Ptr<const ns3::WifiMpdu>>::iterator duplicateIt;
+
+        for (auto it = rxQueue.begin(); it != rxQueue.end(); ++it)
+        {
+            // std::cout << "Isi queue " <<  *it->GetHeader().GetSequenceNumber() << std::endl;
+            // if(mpdu->GetHeader().GetSequenceNumber() != 0 && mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
+            if(mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
+            {
+                rxCount++;
+                duplicateIt = it;
+            }
+        }
+
+        NS_LOG_INFO("Duplicate packet count " << rxCount);
+        if (rxCount == 0)
+        {
+            NS_LOG_INFO("[link=" << +m_linkId << "] New mpdu with sequence number " << mpdu->GetHeader().GetSequenceNumber() << " forwarded up");
+            rxQueue.push_back(mpdu);
+        }
+        else if(rxCount < m_mac->GetNLinks() - 1)
+        {
+            NS_LOG_INFO("[link=" << +m_linkId << "] Duplicate mpdu with sequence number " << mpdu->GetHeader().GetSequenceNumber() << " not forwarded up");
+            rxQueue.push_back(mpdu);
+            return;
+        }
+        else
+        {
+            NS_LOG_INFO("[link=" << +m_linkId << "] Duplicate mpdu with sequence number " << mpdu->GetHeader().GetSequenceNumber() << " not forwarded up");
+            NS_LOG_INFO("All duplicate packets sucesfully received");
+            for (auto it = rxQueue.begin(); it != rxQueue.end(); ++it)
+            {
+                std::cout << (*it)->GetHeader().GetSequenceNumber() << std::endl;
+                // std::cout << "Isi queue " <<  *it->GetHeader().GetSequenceNumber() << std::endl;
+                // if(mpdu->GetHeader().GetSequenceNumber() != 0 && mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
+                if(mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
+                {
+                    it = rxQueue.erase(it);
+                }
+            }
+            return;
+        }
     }
 
     HeFrameExchangeManager::ReceiveMpdu(mpdu, rxSignalInfo, txVector, inAmpdu);

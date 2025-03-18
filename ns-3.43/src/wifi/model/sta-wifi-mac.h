@@ -181,7 +181,7 @@ class StaWifiMac : public WifiMac
     void EnableMultiApCoordination();
     bool MultiApCoordinationEnabled() const;
     void EnableReliabilityMode();
-    bool ReliabilityModeEnabled() const;
+    virtual bool ReliabilityModeEnabled() const override;
 
     /**
      * \param phys the physical layers attached to this MAC.

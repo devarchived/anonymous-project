@@ -128,4 +128,40 @@ Application::AssignStreams(int64_t stream)
     return 0;
 }
 
+void
+Application::EnableReliabilityMode()
+{ // Provide null functionality in case subclass is not interested
+    m_enableReliabilityMode = true;
+}
+
+void 
+Application::SetDesignatedPacket (Ptr<Packet> p)
+{
+}
+
+Ptr<Packet>
+Application::GetDesignatedPacket()
+{
+    return nullptr;
+}
+
+uint32_t
+Application::GetSentCounter()
+{
+    return 0;
+}
+
+uint32_t
+Application::GetPacketSize()
+{
+    return 0;
+}
+
+Time 
+Application::GetInterval()
+{
+    Time timeValue{"0.0s"};
+    return timeValue;
+}
+
 } // namespace ns3

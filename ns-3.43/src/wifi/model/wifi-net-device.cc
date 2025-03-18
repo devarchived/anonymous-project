@@ -525,7 +525,7 @@ WifiNetDevice::ForwardUp(Ptr<const Packet> packet, Mac48Address from, Mac48Addre
 
     Ptr<Packet> copy = packet->Copy();
     if (type != NetDevice::PACKET_OTHERHOST)
-    {
+    {;
         m_mac->NotifyRx(packet);
         copy->RemoveHeader(llc);
         m_forwardUp(this, copy, llc.GetType(), from);

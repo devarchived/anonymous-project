@@ -186,7 +186,14 @@ UdpClient::StartApplication()
 
     m_socket->SetRecvCallback(MakeNullCallback<void, Ptr<Socket>>());
     m_socket->SetAllowBroadcast(true);
-    m_sendEvent = Simulator::Schedule(Seconds(0.0), &UdpClient::Send, this);
+    if(!m_enableReliabilityMode)
+    {
+        m_sendEvent = Simulator::Schedule(Seconds(0.0), &UdpClient::Send, this);
+    }
+    else
+    {
+        m_sendEvent = Simulator::Schedule(Seconds(0.0), &UdpClient::SendDesignatedPacket, this);
+    }
 }
 
 void
@@ -210,7 +217,8 @@ UdpClient::Send()
     seqTs.SetSeq(m_sent);
     NS_ABORT_IF(m_size < seqTs.GetSerializedSize());
     Ptr<Packet> p = Create<Packet>(m_size - seqTs.GetSerializedSize());
-
+    
+    NS_LOG_INFO("Send packet " << p << " from " << from << " to " << to);
     // Trace before adding header, for consistency with PacketSink
     m_txTrace(p);
     m_txTraceWithAddresses(p, from, to);
@@ -239,9 +247,100 @@ UdpClient::Send()
     }
 }
 
+void
+UdpClient::SendDesignatedPacket()
+{
+    NS_LOG_FUNCTION(this << m_designatedPacket);
+    NS_ASSERT(m_sendEvent.IsExpired());
+
+    Address from;
+    Address to;
+    m_socket->GetSockName(from);
+    m_socket->GetPeerName(to);
+    SeqTsHeader seqTs;
+    seqTs.SetSeq(m_sent);
+    NS_ABORT_IF(m_size < seqTs.GetSerializedSize());
+    // Ptr<Packet> p = Create<Packet>(m_size - seqTs.GetSerializedSize());
+    
+    NS_LOG_INFO("Send packet " << m_designatedPacket << " from " << from << " to " << to);
+    // Trace before adding header, for consistency with PacketSink
+    m_txTrace(m_designatedPacket);
+    m_txTraceWithAddresses(m_designatedPacket, from, to);
+
+    m_designatedPacket->AddHeader(seqTs);
+
+    if ((m_socket->Send(m_designatedPacket)) >= 0)
+    {
+        ++m_sent;
+        m_totalTx += m_designatedPacket->GetSize();
+#ifdef NS3_LOG_ENABLE
+        NS_LOG_INFO("TraceDelay TX " << m_size << " bytes to " << m_peerAddressString << " Uid: "
+                                     << m_designatedPacket->GetUid() << " Time: " << (Simulator::Now()).As(Time::S));
+#endif // NS3_LOG_ENABLE
+    }
+#ifdef NS3_LOG_ENABLE
+    else
+    {
+        NS_LOG_INFO("Error while sending " << m_size << " bytes to " << m_peerAddressString);
+    }
+#endif // NS3_LOG_ENABLE
+
+    if (m_sent < m_count || m_count == 0)
+    {
+        m_sendEvent = Simulator::Schedule(m_interval, &UdpClient::SendDesignatedPacket, this);
+    }
+}
+
+void 
+UdpClient::SetDesignatedPacket (Ptr<Packet> p)
+{
+    NS_LOG_FUNCTION(this);
+
+    m_designatedPacket = p;
+}
+
+Ptr<Packet>
+UdpClient::GetDesignatedPacket()
+{
+    NS_LOG_FUNCTION(this);
+
+    SeqTsHeader seqTs;
+    seqTs.SetSeq(m_sent);
+    NS_ABORT_IF(m_size < seqTs.GetSerializedSize());
+    Ptr<Packet> p = Create<Packet>(m_size - seqTs.GetSerializedSize());
+    
+    return p;
+}
+
+uint32_t
+UdpClient::GetSentCounter()
+{
+    NS_LOG_FUNCTION(this);
+
+    return m_sent;
+}
+
+uint32_t
+UdpClient::GetPacketSize()
+{
+    NS_LOG_FUNCTION(this);
+
+    return m_size;
+}
+
+Time 
+UdpClient::GetInterval()
+{
+    NS_LOG_FUNCTION(this);
+
+    return m_interval;
+}
+
 uint64_t
 UdpClient::GetTotalTx() const
 {
+    NS_LOG_FUNCTION(this);
+
     return m_totalTx;
 }
 

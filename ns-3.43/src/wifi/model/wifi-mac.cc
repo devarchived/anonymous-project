@@ -421,6 +421,8 @@ WifiMac::DoInitialize()
             cam->Initialize();
         }
     }
+
+    m_rxQueue = std::make_unique<std::vector<Ptr<const WifiMpdu>>>();
 }
 
 void
@@ -450,6 +452,8 @@ WifiMac::DoDispose()
         m_scheduler->Dispose();
     }
     m_scheduler = nullptr;
+
+    m_rxQueue = nullptr;
 }
 
 WifiMac::LinkEntity::~LinkEntity()
@@ -909,7 +913,6 @@ WifiMac::CompleteConfig()
             it->second->SetWifiMac(this);
             link->channelAccessManager->Add(it->second);
         }
-        std::cout << "WifiMac::CompleteConfig Debug link number " << (int)id << std::endl;
         ConfigurePhyDependentParameters(id);
     }
 
@@ -1531,7 +1534,7 @@ WifiMac::ApplyTidLinkMapping(const Mac48Address& mldAddr, WifiDirection dir)
         // block unmapped links
         if (!notMappedLinks.empty())
         {
-            std::cout << "Ada masuk sini ga ya" << std::endl;
+            NS_LOG_INFO("Blocked queues to DA = " << mldAddr << " from SA = " << GetAddress());
             m_scheduler->BlockQueues(WifiQueueBlockedReason::TID_NOT_MAPPED,
                                      QosUtilsMapTidToAc(tid),
                                      {WIFI_QOSDATA_QUEUE},
@@ -1751,7 +1754,8 @@ WifiMac::NotifyDropPacketToEnqueue(Ptr<Packet> packet, Mac48Address to)
 void
 WifiMac::ForwardUp(Ptr<const Packet> packet, Mac48Address from, Mac48Address to)
 {
-    NS_LOG_FUNCTION(this << packet << from << to);
+    NS_LOG_FUNCTION(this << packet << from << to << &m_forwardUp);
+    NS_LOG_INFO("Packet Uid p: " << packet->GetUid() << " forwarded up");
     m_forwardUp(packet, from, to);
 }
 
@@ -2499,6 +2503,18 @@ WifiMac::GetMaxAmsduSize(AcIndex ac) const
         return 0;
     }
     return maxSize;
+}
+
+std::vector<Ptr<const WifiMpdu>>& 
+WifiMac::GetRxQueue() 
+{
+    return *m_rxQueue;
+}
+
+bool 
+WifiMac::ReliabilityModeEnabled() const
+{
+    return false;
 }
 
 } // namespace ns3

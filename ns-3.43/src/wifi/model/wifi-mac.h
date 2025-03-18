@@ -779,6 +779,10 @@ class WifiMac : public Object
                          uint8_t tid,
                          uint8_t linkId) const;
 
+    std::vector<Ptr<const WifiMpdu>>&  GetRxQueue();
+
+    virtual bool ReliabilityModeEnabled() const;
+
   protected:
     void DoInitialize() override;
     void DoDispose() override;
@@ -940,6 +944,8 @@ class WifiMac : public Object
 
     Callback<void> m_linkUp;   //!< Callback when a link is up
     Callback<void> m_linkDown; //!< Callback when a link is down
+
+    std::unique_ptr<std::vector<Ptr<const WifiMpdu>>> m_rxQueue;
 
   private:
     /**

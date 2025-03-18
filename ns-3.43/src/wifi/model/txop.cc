@@ -612,7 +612,7 @@ void
 Txop::Queue(Ptr<WifiMpdu> mpdu)
 {
     NS_LOG_FUNCTION(this << *mpdu);
-
+    
     // channel access can be requested on a blocked link, if the reason for blocking the link
     // is temporary
     auto linkIds = m_mac->GetMacQueueScheduler()->GetLinkIds(
@@ -620,12 +620,14 @@ Txop::Queue(Ptr<WifiMpdu> mpdu)
         mpdu,
         {WifiQueueBlockedReason::USING_OTHER_EMLSR_LINK,
          WifiQueueBlockedReason::WAITING_EMLSR_TRANSITION_DELAY});
-
+    
+    NS_LOG_INFO("Number of available links : " << linkIds.size());
     // ignore the links for which a channel access request event is already running
     for (auto it = linkIds.begin(); it != linkIds.end();)
     {
         if (const auto& event = GetLink(*it).accessRequest.event; event.IsPending())
         {
+            NS_LOG_INFO("Link is deleted : " << *it);
             it = linkIds.erase(it);
         }
         else
@@ -647,13 +649,18 @@ Txop::Queue(Ptr<WifiMpdu> mpdu)
     std::vector<uint8_t> shuffledLinkIds(linkIds.cbegin(), linkIds.cend());
     Shuffle(shuffledLinkIds.begin(), shuffledLinkIds.end(), m_shuffleLinkIdsGen.GetRv());
 
-    if (!linkIds.empty() && g_log.IsEnabled(ns3::LOG_DEBUG))
+    if (!linkIds.empty())// && g_log.IsEnabled(ns3::LOG_DEBUG))
     {
         std::stringstream ss;
         std::copy(shuffledLinkIds.cbegin(),
                   shuffledLinkIds.cend(),
                   std::ostream_iterator<uint16_t>(ss, " "));
         NS_LOG_DEBUG("Request channel access on link IDs: " << ss.str());
+        NS_LOG_INFO("Request channel access on link IDs: " << ss.str());
+    }
+    else
+    {
+        NS_LOG_INFO("All links already requested channel" );
     }
 
     for (const auto linkId : shuffledLinkIds)
@@ -686,17 +693,20 @@ Txop::StartAccessAfterEvent(uint8_t linkId, bool hadFramesToTransmit, bool check
     if (!m_mac->GetWifiPhy(linkId))
     {
         NS_LOG_DEBUG("No PHY operating on link " << +linkId);
+        NS_LOG_INFO("No PHY operating on link " << +linkId);
         return;
     }
 
     if (GetLink(linkId).access != NOT_REQUESTED)
     {
         NS_LOG_DEBUG("Channel access already requested or granted on link " << +linkId);
+        NS_LOG_INFO("Channel access already requested or granted on link " << +linkId);
         return;
     }
 
     if (!HasFramesToTransmit(linkId))
     {
+        NS_LOG_INFO("No frames to transmit on link " << +linkId);
         NS_LOG_DEBUG("No frames to transmit on link " << +linkId);
         return;
     }

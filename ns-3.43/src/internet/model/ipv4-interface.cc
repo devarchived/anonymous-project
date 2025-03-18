@@ -204,9 +204,10 @@ Ipv4Interface::Send(Ptr<Packet> p, const Ipv4Header& hdr, Ipv4Address dest)
     NS_LOG_FUNCTION(this << *p << dest);
     if (!IsUp())
     {
+        NS_LOG_INFO("Ipv4 is down for " << dest);
         return;
     }
-
+    
     // Check for a loopback device, if it's the case we don't pass through
     // traffic control layer
     if (DynamicCast<LoopbackNetDevice>(m_device))
@@ -214,6 +215,7 @@ Ipv4Interface::Send(Ptr<Packet> p, const Ipv4Header& hdr, Ipv4Address dest)
         /// \todo additional checks needed here (such as whether multicast
         /// goes to loopback)?
         p->AddHeader(hdr);
+        NS_LOG_INFO("Forwarding packet " << p << "to WifiNetDevice");
         m_device->Send(p, m_device->GetBroadcast(), Ipv4L3Protocol::PROT_NUMBER);
         return;
     }
@@ -225,6 +227,7 @@ Ipv4Interface::Send(Ptr<Packet> p, const Ipv4Header& hdr, Ipv4Address dest)
     {
         if (dest == (*i).GetLocal())
         {
+            NS_LOG_INFO("Debug 1");
             p->AddHeader(hdr);
             Simulator::ScheduleNow(&TrafficControlLayer::Receive,
                                    m_tc,
@@ -239,6 +242,7 @@ Ipv4Interface::Send(Ptr<Packet> p, const Ipv4Header& hdr, Ipv4Address dest)
     }
     if (m_device->NeedsArp())
     {
+        NS_LOG_INFO("Debug 2");
         NS_LOG_LOGIC("Needs ARP"
                      << " " << dest);
         Ptr<ArpL3Protocol> arp = m_node->GetObject<ArpL3Protocol>();
@@ -252,6 +256,7 @@ Ipv4Interface::Send(Ptr<Packet> p, const Ipv4Header& hdr, Ipv4Address dest)
         }
         else if (dest.IsMulticast())
         {
+            NS_LOG_INFO("Debug 3");
             NS_LOG_LOGIC("IsMulticast");
             NS_ASSERT_MSG(m_device->IsMulticast(),
                           "ArpIpv4Interface::SendTo (): Sending multicast packet over "
@@ -262,6 +267,7 @@ Ipv4Interface::Send(Ptr<Packet> p, const Ipv4Header& hdr, Ipv4Address dest)
         }
         else
         {
+            NS_LOG_INFO("Debug 4");
             for (auto i = m_ifaddrs.begin(); i != m_ifaddrs.end(); ++i)
             {
                 if (dest.IsSubnetDirectedBroadcast((*i).GetMask()))
@@ -281,6 +287,7 @@ Ipv4Interface::Send(Ptr<Packet> p, const Ipv4Header& hdr, Ipv4Address dest)
 
         if (found)
         {
+            NS_LOG_INFO("Debug 5");
             NS_LOG_LOGIC("Address Resolved.  Send.");
             m_tc->Send(m_device,
                        Create<Ipv4QueueDiscItem>(p,
@@ -291,6 +298,7 @@ Ipv4Interface::Send(Ptr<Packet> p, const Ipv4Header& hdr, Ipv4Address dest)
     }
     else
     {
+        NS_LOG_INFO("Debug 6");
         NS_LOG_LOGIC("Doesn't need ARP");
         m_tc->Send(m_device,
                    Create<Ipv4QueueDiscItem>(p,

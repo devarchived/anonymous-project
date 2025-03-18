@@ -352,6 +352,7 @@ TrafficControlLayer::Send(Ptr<NetDevice> device, Ptr<QueueDiscItem> item)
     NS_LOG_FUNCTION(this << device << item);
 
     NS_LOG_DEBUG("Send packet to device " << device << " protocol number " << item->GetProtocol());
+    NS_LOG_INFO("Send packet to device " << device << " protocol number " << item->GetProtocol());
 
     Ptr<NetDeviceQueueInterface> devQueueIface;
     auto ndi = m_netDevices.find(device);
@@ -378,6 +379,7 @@ TrafficControlLayer::Send(Ptr<NetDevice> device, Ptr<QueueDiscItem> item)
 
     if (ndi == m_netDevices.end() || !ndi->second.m_rootQueueDisc)
     {
+        NS_LOG_INFO("Debug lagi 1");
         // The device has no attached queue disc, thus add the header to the packet and
         // send it directly to the device if the selected queue is not stopped
         item->AddHeader();
@@ -393,11 +395,13 @@ TrafficControlLayer::Send(Ptr<NetDevice> device, Ptr<QueueDiscItem> item)
         }
         else
         {
+            NS_LOG_INFO("Debug lagi 2");
             m_dropped(item->GetPacket());
         }
     }
     else
     {
+        NS_LOG_INFO("Debug lagi 3");
         // Enqueue the packet in the queue disc associated with the netdevice queue
         // selected for the packet and try to dequeue packets from such queue disc
         item->SetTxQueueIndex(txq);

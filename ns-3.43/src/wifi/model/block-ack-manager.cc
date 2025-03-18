@@ -619,6 +619,7 @@ void
 BlockAckManager::NotifyGotMpdu(Ptr<const WifiMpdu> mpdu)
 {
     NS_LOG_FUNCTION(this << *mpdu);
+    
     auto originator = mpdu->GetOriginal()->GetHeader().GetAddr2();
     NS_ASSERT(mpdu->GetHeader().IsQosData());
     auto tid = mpdu->GetHeader().GetQosTid();

@@ -78,6 +78,7 @@ class ApWifiMac : public WifiMac
     int64_t AssignStreams(int64_t stream) override;
     void EnableMultiApCoordination();
     bool MultiApCoordinationEnabled() const;
+    virtual bool ReliabilityModeEnabled() const override;
 
     /**
      * Set the AP EMLSR Manager.
@@ -598,6 +599,8 @@ class ApWifiMac : public WifiMac
     bool m_sendUnsolProbeResp;      //!< send unsolicited Probe Response instead of FILS Discovery
     
     bool m_enableMultiApCoordination{false};
+
+    bool m_reliabilityMode {false};
 
     /// store value and timestamp for each Buffer Status Report
     struct BsrType

@@ -392,6 +392,7 @@ WifiMacQueueSchedulerImpl<Priority, Compare>::InitQueueInfo(AcIndex ac, Ptr<cons
         {
             linkIdsMap = {{*linkId, Mask{}}};
         }
+        NS_LOG_INFO("linkIdsMap.size() : " << linkIdsMap.size());
     }
 
     return queueInfoIt;

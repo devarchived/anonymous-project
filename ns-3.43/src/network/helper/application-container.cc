@@ -8,6 +8,8 @@
 
 #include "application-container.h"
 
+#include "ns3/simulator.h"
+
 #include "ns3/log.h"
 #include "ns3/names.h"
 
@@ -60,6 +62,11 @@ ApplicationContainer::Add(ApplicationContainer other)
 {
     for (auto i = other.Begin(); i != other.End(); i++)
     {
+        if(m_enableReliabilityMode)
+        {
+            Ptr<Application> app = *i;
+            app->EnableReliabilityMode();
+        }
         m_applications.push_back(*i);
     }
 }
@@ -67,6 +74,10 @@ ApplicationContainer::Add(ApplicationContainer other)
 void
 ApplicationContainer::Add(Ptr<Application> application)
 {
+    if(m_enableReliabilityMode)
+    {
+        application->EnableReliabilityMode();
+    }
     m_applications.push_back(application);
 }
 
@@ -74,12 +85,25 @@ void
 ApplicationContainer::Add(std::string name)
 {
     Ptr<Application> application = Names::Find<Application>(name);
+    if(m_enableReliabilityMode)
+    {
+        application->EnableReliabilityMode();
+    }
     m_applications.push_back(application);
 }
 
 void
 ApplicationContainer::Start(Time start) const
 {
+    NS_LOG_FUNCTION(this);
+
+    Ptr<Application> firstApp = *Begin();
+
+    if(m_enableReliabilityMode && (firstApp->GetInstanceTypeId().GetName() == "ns3::UdpClient"))
+    {
+        Simulator::Schedule(start, &ApplicationContainer::DesignatePacketToSend, this);
+    }
+
     for (auto i = Begin(); i != End(); ++i)
     {
         Ptr<Application> app = *i;
@@ -90,6 +114,8 @@ ApplicationContainer::Start(Time start) const
 void
 ApplicationContainer::StartWithJitter(Time start, Ptr<RandomVariableStream> rv) const
 {
+    NS_LOG_FUNCTION(this);
+
     for (auto i = Begin(); i != End(); ++i)
     {
         Ptr<Application> app = *i;
@@ -102,11 +128,37 @@ ApplicationContainer::StartWithJitter(Time start, Ptr<RandomVariableStream> rv) 
 void
 ApplicationContainer::Stop(Time stop) const
 {
+    NS_LOG_FUNCTION(this);
+
     for (auto i = Begin(); i != End(); ++i)
     {
         Ptr<Application> app = *i;
         app->SetStopTime(stop);
     }
+}
+
+void
+ApplicationContainer::DesignatePacketToSend() const
+{
+    NS_LOG_FUNCTION(this);
+
+    Ptr<Application> firstApp = *Begin();
+    auto p = firstApp->GetDesignatedPacket();
+
+    for (auto i = Begin(); i != End(); ++i)
+    {
+        Ptr<Application> app = *i;
+        app->SetDesignatedPacket(p);
+    }
+
+    Simulator::Schedule(firstApp->GetInterval(), std::bind(&ApplicationContainer::DesignatePacketToSend, this));
+}
+
+void 
+ApplicationContainer::EnableReliabilityMode()
+{
+    NS_LOG_FUNCTION(this);
+    m_enableReliabilityMode = true;
 }
 
 } // namespace ns3

@@ -121,6 +121,14 @@ class Application : public Object
     typedef void (*StateTransitionCallback)(const std::string& oldState,
                                             const std::string& newState);
 
+    void EnableReliabilityMode();
+
+    virtual uint32_t GetSentCounter();
+    virtual uint32_t GetPacketSize();
+    virtual void SetDesignatedPacket(Ptr<Packet> p);
+    virtual Ptr<Packet> GetDesignatedPacket();
+    virtual Time GetInterval();
+
   private:
     /**
      * \brief Application specific startup code
@@ -149,6 +157,8 @@ class Application : public Object
     Time m_stopTime;      //!< The simulation time that the application will end
     EventId m_startEvent; //!< The event that will fire at m_startTime to start the application
     EventId m_stopEvent;  //!< The event that will fire at m_stopTime to end the application
+  
+    bool m_enableReliabilityMode{false};
 };
 
 } // namespace ns3

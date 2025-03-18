@@ -333,6 +333,9 @@ QosTxop::HasFramesToTransmit(uint8_t linkId)
     NS_LOG_DEBUG(m_ac << " on link " << +linkId << (hasFramesToTransmit ? " has" : " has not")
                       << " frames to transmit with " << m_queue->GetNPackets()
                       << " packets in the queue");
+    // NS_LOG_INFO(m_ac << " on link " << +linkId << (hasFramesToTransmit ? " has" : " has not")
+    //                   << " frames to transmit with " << m_queue->GetNPackets()
+    //                   << " packets in the queue");
     return hasFramesToTransmit;
 }
 
@@ -374,7 +377,6 @@ Ptr<WifiMpdu>
 QosTxop::PeekNextMpdu(uint8_t linkId, uint8_t tid, Mac48Address recipient, Ptr<const WifiMpdu> mpdu)
 {
     NS_LOG_FUNCTION(this << +linkId << +tid << recipient << mpdu);
-
     // lambda to peek the next frame
     auto peek = [this, &linkId, &tid, &recipient, &mpdu]() -> Ptr<WifiMpdu> {
         if (tid == 8 && recipient.IsBroadcast()) // undefined TID and recipient

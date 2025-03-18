@@ -453,6 +453,8 @@ ApWifiMac::Enqueue(Ptr<WifiMpdu> mpdu, Mac48Address to, Mac48Address from)
 
         auto txop = hdr.IsQosData() ? StaticCast<Txop>(GetQosTxop(hdr.GetQosTid())) : GetTxop();
         NS_ASSERT(txop);
+        
+        NS_LOG_INFO("[mac=" << GetAddress() << "] Queueing mpdu from " << from << " to " << to);
         txop->Queue(mpdu);
 
         // create another MPDU if needed
@@ -1609,7 +1611,7 @@ ApWifiMac::ScheduleFilsDiscOrUnsolProbeRespFrames(uint8_t linkId)
 void
 ApWifiMac::TxOk(Ptr<const WifiMpdu> mpdu)
 {
-    NS_LOG_FUNCTION(this << *mpdu);
+    NS_LOG_FUNCTION(GetAddress() << this << *mpdu);
     const WifiMacHeader& hdr = mpdu->GetHeader();
 
     if (hdr.IsAssocResp() || hdr.IsReassocResp())
@@ -1695,6 +1697,8 @@ ApWifiMac::TxFailed(WifiMacDropReason timeoutReason, Ptr<const WifiMpdu> mpdu)
         {
             NS_LOG_DEBUG("AP=" << hdr.GetAddr2()
                                << " association failed with STA=" << hdr.GetAddr1());
+            NS_LOG_INFO("AP=" << hdr.GetAddr2()
+                               << " association failed with STA=" << hdr.GetAddr1());
             GetWifiRemoteStationManager(*linkId)->RecordGotAssocTxFailed(hdr.GetAddr1());
         }
 
@@ -1712,6 +1716,8 @@ ApWifiMac::TxFailed(WifiMacDropReason timeoutReason, Ptr<const WifiMpdu> mpdu)
                 {
                     NS_LOG_DEBUG("AP=" << GetFrameExchangeManager(i)->GetAddress()
                                        << " association failed with STA=" << *staAddress);
+                    NS_LOG_INFO("AP=" << GetFrameExchangeManager(i)->GetAddress()
+                                       << " association failed with STA=" << *staAddress);
                     stationManager->RecordGotAssocTxFailed(*staAddress);
                 }
             }
@@ -1726,6 +1732,7 @@ ApWifiMac::ProcessPowerManagementFlag(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
 
     Mac48Address staAddr = mpdu->GetHeader().GetAddr2();
     bool staInPsMode = GetWifiRemoteStationManager(linkId)->IsInPsMode(staAddr);
+    NS_LOG_INFO("[" << GetAddress() << "] STA " << staAddr << " IsInPsMode " << staInPsMode);
 
     if (!staInPsMode && mpdu->GetHeader().IsPowerManagement())
     {
@@ -1748,9 +1755,8 @@ ApWifiMac::StaSwitchingToPsMode(const Mac48Address& staAddr, uint8_t linkId)
 
     // Block frames addressed to the STA in PS mode
     NS_LOG_DEBUG("Block destination " << staAddr << " on link " << +linkId);
-    NS_LOG_INFO("Block destination " << staAddr << " on link " << +linkId);
+    NS_LOG_INFO("[" << GetAddress() << "] Block destination " << staAddr << " on link " << +linkId);
     auto staMldAddr = GetWifiRemoteStationManager(linkId)->GetMldAddress(staAddr).value_or(staAddr);
-    NS_LOG_INFO("Apasih " << staMldAddr << " on link " << +linkId);
     BlockUnicastTxOnLinks(WifiQueueBlockedReason::POWER_SAVE_MODE, staMldAddr, {linkId});
 }
 
@@ -1824,6 +1830,7 @@ ApWifiMac::Receive(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
         {
             // this MPDU is being acknowledged by the AP, so we can process
             // the Power Management flag
+            NS_LOG_INFO("ProcessPowerManagementFlage IsMgt()");
             ProcessPowerManagementFlag(mpdu, *apLinkId);
 
             Mac48Address to = hdr->GetAddr3();
@@ -1900,6 +1907,7 @@ ApWifiMac::Receive(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
         {
             // this MPDU is being acknowledged by the AP, so we can process
             // the Power Management flag
+            NS_LOG_INFO("ProcessPowerManagementFlage IsMgt()");
             ProcessPowerManagementFlag(mpdu, linkId);
         }
         if (hdr->IsProbeReq() && (hdr->GetAddr1().IsGroup() ||
@@ -2659,6 +2667,12 @@ void
 ApWifiMac::EnableMultiApCoordination()
 {
     m_enableMultiApCoordination = true;
+}
+
+bool
+ApWifiMac::ReliabilityModeEnabled() const
+{
+    return m_reliabilityMode;
 }
 
 } // namespace ns3

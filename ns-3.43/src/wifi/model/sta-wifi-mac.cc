@@ -1195,46 +1195,26 @@ StaWifiMac::Enqueue(Ptr<WifiMpdu> mpdu, Mac48Address to, Mac48Address from)
     
     if(MultiApCoordinationEnabled())
     {
-        if (ReliabilityModeEnabled())
+        for (const auto& modLinkId : linkIds)
         {
-            for (const auto& linkId : linkIds)
+            apMldAddr = GetWifiRemoteStationManager(modLinkId)->GetMldAddress(GetBssid(modLinkId));
+            if (apMldAddr && to == *apMldAddr)
             {
-                apMldAddr = GetWifiRemoteStationManager(linkId)->GetMldAddress(GetBssid(linkId));
-
-                hdr.SetAddr1(apMldAddr.value_or(GetBssid(linkId)));
-                hdr.SetAddr2(apMldAddr ? GetAddress() : GetFrameExchangeManager(linkId)->GetAddress());
-                hdr.SetAddr3(to);
-                hdr.SetDsNotFrom();
-                hdr.SetDsTo();
-
-                auto txop = hdr.IsQosData() ? StaticCast<Txop>(GetQosTxop(hdr.GetQosTid())) : GetTxop();
-                NS_ASSERT(txop);
-                txop->Queue(mpdu);
+                NS_LOG_INFO("Corrected apMldAddr for link " << +modLinkId << " is " << *apMldAddr);
+                linkId = modLinkId;
+                break;
             }
         }
-        else 
-        {
-            for (const auto& modLinkId : linkIds)
-            {
-                apMldAddr = GetWifiRemoteStationManager(modLinkId)->GetMldAddress(GetBssid(modLinkId));
-                if (apMldAddr && to == *apMldAddr)
-                {
-                    NS_LOG_INFO("Corrected apMldAddr for link " << +modLinkId << " is " << *apMldAddr);
-                    linkId = modLinkId;
-                    break;
-                }
-            }
 
-            hdr.SetAddr1(apMldAddr.value_or(GetBssid(linkId)));
-            hdr.SetAddr2(apMldAddr ? GetAddress() : GetFrameExchangeManager(linkId)->GetAddress());
-            hdr.SetAddr3(to);
-            hdr.SetDsNotFrom();
-            hdr.SetDsTo();
+        hdr.SetAddr1(apMldAddr.value_or(GetBssid(linkId)));
+        hdr.SetAddr2(apMldAddr ? GetAddress() : GetFrameExchangeManager(linkId)->GetAddress());
+        hdr.SetAddr3(to);
+        hdr.SetDsNotFrom();
+        hdr.SetDsTo();
 
-            auto txop = hdr.IsQosData() ? StaticCast<Txop>(GetQosTxop(hdr.GetQosTid())) : GetTxop();
-            NS_ASSERT(txop);
-            txop->Queue(mpdu);
-        }
+        auto txop = hdr.IsQosData() ? StaticCast<Txop>(GetQosTxop(hdr.GetQosTid())) : GetTxop();
+        NS_ASSERT(txop);
+        txop->Queue(mpdu);
     }
     else 
     {
@@ -1510,10 +1490,13 @@ StaWifiMac::ReceiveAssocResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
     const WifiMacHeader& hdr = mpdu->GetHeader();
     NS_ASSERT(hdr.IsAssocResp() || hdr.IsReassocResp());
 
-    // if (m_state != WAIT_ASSOC_RESP)
-    // {
-    //     return;
-    // }
+    if(!MultiApCoordinationEnabled())
+    {
+        if (m_state != WAIT_ASSOC_RESP)
+        {
+            return;
+        }
+    }
 
     std::optional<Mac48Address> apMldAddress;
     MgtAssocResponseHeader assocResp;
@@ -1608,9 +1591,12 @@ StaWifiMac::ReceiveAssocResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
                             "The link on which the Association Response was received "
                             "is not a link we requested to setup");
             NS_LOG_INFO("ABORT!! " << +linkId << " != " << +mle->GetLinkIdInfo());
-            // NS_ABORT_MSG_IF(linkId != mle->GetLinkIdInfo(),
-            //                 "The link ID of the AP that transmitted the Association "
-            //                 "Response does not match the stored link ID");
+            if(!MultiApCoordinationEnabled())
+            {
+                NS_ABORT_MSG_IF(linkId != mle->GetLinkIdInfo(),
+                        "The link ID of the AP that transmitted the Association "
+                        "Response does not match the stored link ID");
+            }
             // NS_LOG_INFO("ABORT!! Mismatch for address stored in station manager for link " << +linkId <<  " with " << GetWifiRemoteStationManager(linkId)->GetMldAddress(hdr.GetAddr2()).value() << " != " << mle->GetMldMacAddress() << " as AP MLD MAC Address");
             NS_ABORT_MSG_IF(GetWifiRemoteStationManager(linkId)->GetMldAddress(hdr.GetAddr2()) !=
                                 mle->GetMldMacAddress(),
@@ -1702,9 +1688,10 @@ StaWifiMac::ReceiveAssocResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
         }
     }
 
-    SetPmModeAfterAssociation(linkId);
-
-    std::cout << "Debug StaWifiMac::ReceiveAssocResp() in state " << (int)m_state << std::endl;
+    if (MultiApCoordinationEnabled() != true)
+    {
+        SetPmModeAfterAssociation(linkId);
+    }
 }
 
 void

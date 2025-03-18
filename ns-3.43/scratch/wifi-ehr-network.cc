@@ -139,6 +139,136 @@ PrintIntermediateTput(std::vector<uint64_t>& rxBytes,
     }
 }
 
+/// True for verbose output.
+static bool g_verbose = true;
+
+/**
+ * MAC-level TX trace.
+ *
+ * \param context The context.
+ * \param p The packet.
+ */
+void
+DevTxTrace(std::string context, Ptr<const Packet> p)
+{
+    uint64_t packetUid = p->GetUid();
+    if (g_verbose)
+    {
+        std::cout << Simulator::Now().As(Time::US) << " MAC TX p: " << packetUid << std::endl;
+    }
+}
+
+/**
+ * MAC-level RX trace.
+ *
+ * \param context The context.
+ * \param p The packet.
+ */
+void
+DevRxTrace(std::string context, Ptr<const Packet> p)
+{
+    uint64_t packetUid = p->GetUid();
+    if (g_verbose)
+    {
+        std::cout << Simulator::Now().As(Time::US) << " MAC RX p: " << packetUid << std::endl;
+    }
+}
+
+/**
+ * MAC-level TX trace.
+ *
+ * \param context The context.
+ * \param p The packet.
+ */
+void
+DevTxDropTrace(std::string context, Ptr<const Packet> p)
+{
+    uint64_t packetUid = p->GetUid();
+    if (g_verbose)
+    {
+        std::cout << Simulator::Now().As(Time::US) << " MAC TX drop p: " << packetUid << std::endl;
+    }
+}
+
+/**
+ * MAC-level RX trace.
+ *
+ * \param context The context.
+ * \param p The packet.
+ */
+void
+DevRxDropTrace(std::string context, Ptr<const Packet> p)
+{
+    uint64_t packetUid = p->GetUid();
+    if (g_verbose)
+    {
+        std::cout << Simulator::Now().As(Time::US) << " MAC RX drop p: " << packetUid << std::endl;
+    }
+}
+
+// /**
+//  * MAC-level TX trace.
+//  *
+//  * \param context The context.
+//  * \param p The packet.
+//  */
+// void
+// DevAckedMpduTrace(std::string context, Ptr<const WifiMpdu> mpdu)
+// {
+//     uint64_t mpduUid = mpdu->GetPacket()->GetUid();
+//     if (g_verbose)
+//     {
+//         std::cout << Simulator::Now().As(Time::US) << " MAC ACK Packet : " << mpduUid << std::endl;
+//     }
+// }
+
+// /**
+//  * MAC-level RX trace.
+//  *
+//  * \param context The context.
+//  * \param p The packet.
+//  */
+// void
+// DevDroppedMpduTrace(std::string context, Ptr<const WifiMpdu> mpdu)
+// {
+//     uint64_t mpduUid = mpdu->GetPacket()->GetUid();
+//     if (g_verbose)
+//     {
+//         std::cout << Simulator::Now().As(Time::US) << " MAC Dropped Packet : " << mpduUid << std::endl;
+//     }
+// }
+
+/**
+ * APP-level TX trace.
+ *
+ * \param context The context.
+ * \param p The packet.
+ */
+void
+AppTxTrace(std::string context, Ptr<const Packet> p)
+{
+    uint64_t packetUid = p->GetUid();
+    if (g_verbose)
+    {
+        std::cout << Simulator::Now().As(Time::US) << " APP TX p: " << packetUid << std::endl;
+    }
+}
+
+/**
+ * APP-level RX trace.
+ *
+ * \param context The context.
+ * \param p The packet.
+ */
+void
+AppRxTrace(std::string context, Ptr<const Packet> p)
+{
+    if (g_verbose)
+    {
+        std::cout << " APP RX p: " << *p << std::endl;
+    }
+}
+
 int
 main(int argc, char* argv[])
 {
@@ -159,7 +289,7 @@ main(int argc, char* argv[])
     double frequency{5};  // whether the first link operates in the 2.4, 5 or 6 GHz
     double frequency2{6}; // whether the second link operates in the 2.4, 5 or 6 GHz (0 means no
                           // second link exists)
-    double frequency3{0}; // whether the third link operates in the 2.4, 5 or 6 GHz (0 means no third link exists)
+    double frequency3{2.4}; // whether the third link operates in the 2.4, 5 or 6 GHz (0 means no third link exists)
     int channelWidth = 20;
     int gi = 3200;
     std::size_t nStations{1};
@@ -548,7 +678,7 @@ main(int argc, char* argv[])
 
         serverApp.Start(Seconds(0.0));
         serverApp.Stop(simulationTime + Seconds(1.0));
-        const auto packetInterval = payloadSize * 8.0 / maxLoad;
+        const auto packetInterval = payloadSize * 8.0 / (maxLoad);
 
         for (std::size_t i = 0; i < nStations; i++)
         {
@@ -621,6 +751,15 @@ main(int argc, char* argv[])
     }
     Simulator::Schedule (MicroSeconds (100), &TimePasses);
 
+    // Enable tracing
+    Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpClient/Tx", MakeCallback(&AppTxTrace));
+    Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTx", MakeCallback(&DevTxTrace));
+    // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTxDrop", MakeCallback(&DevTxDropTrace));
+    Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRx", MakeCallback(&DevRxTrace));
+    // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRxDrop", MakeCallback(&DevRxDropTrace));
+    // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/AckedMpdu", MakeCallback(&DevAckedMpduTrace));
+    // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/DroppedMpdu", MakeCallback(&DevDroppedMpduTrace));
+
     Simulator::Stop(simulationTime + Seconds(1.0));
     Simulator::Run();
 
@@ -633,6 +772,8 @@ main(int argc, char* argv[])
     auto rxBytes = std::accumulate(cumulRxBytes.cbegin(), cumulRxBytes.cend(), 0.0);
     auto throughput = (rxBytes * 8) / simulationTime.GetMicroSeconds(); // Mbit/s
 
+    std::cout << "RxBytes : " << cumulRxBytes[0] << std::endl;
+    
     std::cout << +mcs << "\t\t\t" << widthStr << " MHz\t\t"
                           << (widthStr.size() > 3 ? "" : "\t") << gi << " ns\t\t\t" << throughput
                           << " Mbit/s" << std::endl;

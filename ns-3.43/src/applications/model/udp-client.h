@@ -60,6 +60,14 @@ class UdpClient : public Application
      */
     uint64_t GetTotalTx() const;
 
+    
+    virtual void SetDesignatedPacket(Ptr<Packet> p) override;
+    virtual Ptr<Packet> GetDesignatedPacket() override;
+
+    virtual uint32_t GetPacketSize() override;
+    virtual uint32_t GetSentCounter() override;
+    virtual Time GetInterval() override;
+
   private:
     void StartApplication() override;
     void StopApplication() override;
@@ -68,6 +76,7 @@ class UdpClient : public Application
      * \brief Send a packet
      */
     void Send();
+    void SendDesignatedPacket();
 
     /// Traced Callback: transmitted packets.
     TracedCallback<Ptr<const Packet>> m_txTrace;
@@ -86,6 +95,8 @@ class UdpClient : public Application
     uint16_t m_peerPort;   //!< Remote peer port
     uint8_t m_tos;         //!< The packets Type of Service
     EventId m_sendEvent;   //!< Event to send the next packet
+
+    Ptr<Packet> m_designatedPacket;
 
 #ifdef NS3_LOG_ENABLE
     std::string m_peerAddressString; //!< Remote peer address string

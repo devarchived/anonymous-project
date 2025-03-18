@@ -114,7 +114,7 @@ void
 RecipientBlockAckAgreement::NotifyReceivedMpdu(Ptr<const WifiMpdu> mpdu)
 {
     NS_LOG_FUNCTION(this << *mpdu);
-
+    
     uint16_t mpduSeqNumber = mpdu->GetHeader().GetSequenceNumber();
     uint16_t distance = GetDistance(mpduSeqNumber, m_scoreboard.GetWinStart());
 

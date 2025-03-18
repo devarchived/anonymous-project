@@ -294,24 +294,29 @@ main(int argc, char* argv[])
     double frequencySta{5};  // whether the first link operates in the 2.4, 5 or 6 GHz
     double frequencySta_2{6}; // whether the second link operates in the 2.4, 5 or 6 GHz (0 means no
                           // second link exists)
-    double frequencySta_3{0}; // whether the third link operates in the 2.4, 5 or 6 GHz (0 means no third link exists)
+    double frequencySta_3{2.4}; // whether the third link operates in the 2.4, 5 or 6 GHz (0 means no third link exists)
     double frequencyApA{5};
     double frequencyApA_2{0};
     double frequencyApA_3{0};
     double frequencyApB{6};
     double frequencyApB_2{0};
     double frequencyApB_3{0};
+    double frequencyApC{2.4};
+    double frequencyApC_2{0};
+    double frequencyApC_3{0};
     dBm_u powSta{10.0};
     dBm_u powAp1{21.0};
     dBm_u powAp2{21.0};
+    dBm_u powAp3{21.0};
     dBm_u ccaEdTrSta{-62};
     dBm_u ccaEdTrAp1{-62};
     dBm_u ccaEdTrAp2{-62};
+    dBm_u ccaEdTrAp3{-62};
     dBm_u minimumRssi{-82};
     int channelWidth = 20;
     int gi = 3200;
     std::size_t nStations{1};
-    std::size_t nAPs{2};
+    std::size_t nAPs{3};
     std::string dlAckSeqType{"MU-BAR"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
     bool enableUlOfdma{false};
     bool enableBsrp{false};
@@ -459,20 +464,25 @@ main(int argc, char* argv[])
     WifiHelper wifiSta;
     WifiHelper wifiApA;
     WifiHelper wifiApB;
+    WifiHelper wifiApC;
 
     // Sets the Wi-Fi standard to 802.11be
     wifiSta.SetStandard(WIFI_STANDARD_80211be);
     wifiApA.SetStandard(WIFI_STANDARD_80211be);
     wifiApB.SetStandard(WIFI_STANDARD_80211be);
+    wifiApC.SetStandard(WIFI_STANDARD_80211be);
     std::array<std::string, 3> channelStrSta;
     std::array<std::string, 3> channelStrApA;
     std::array<std::string, 3> channelStrApB;
+    std::array<std::string, 3> channelStrApC;
     std::array<FrequencyRange, 3> freqRangesSta;
     std::array<FrequencyRange, 3> freqRangesApA;
     std::array<FrequencyRange, 3> freqRangesApB;
+    std::array<FrequencyRange, 3> freqRangesApC;
     uint8_t nLinksSta = 0;
     uint8_t nLinksApA = 0;
     uint8_t nLinksApB = 0;
+    uint8_t nLinksApC = 0;
 
     std::string ctrlRateStr;
     std::string dataModeStr;
@@ -500,6 +510,13 @@ main(int argc, char* argv[])
     // Check if there are duplicate frequencies used
     if (frequencyApB_2 == frequencyApB || frequencyApB_3 == frequencyApB ||
         (frequencyApB_3 != 0 && frequencyApB_3 == frequencyApB_2))
+    {
+        NS_FATAL_ERROR("Frequency values must be unique!");
+    }
+
+    // Check if there are duplicate frequencies used
+    if (frequencyApC_2 == frequencyApC || frequencyApC_3 == frequencyApC ||
+        (frequencyApC_3 != 0 && frequencyApC_3 == frequencyApC_2))
     {
         NS_FATAL_ERROR("Frequency values must be unique!");
     }
@@ -761,6 +778,92 @@ main(int argc, char* argv[])
 
         nLinksApB++;
     }
+
+    for (auto freq : {frequencyApC, frequencyApC_2, frequencyApC_3})
+    {
+        if (nLinksApC > 0 && freq == 0)
+        {
+            break;
+        }
+        if (freq == 6)
+        {
+            channelStrApC[nLinksApC] = "{1, " + segmentWidthStr + ", ";
+            channelStrApC[nLinksApC] += "BAND_6GHZ, 0}";
+            freqRangesApC[nLinksApC] = WIFI_SPECTRUM_6_GHZ;
+            Config::SetDefault("ns3::LogDistancePropagationLossModel::ReferenceLoss",
+                                DoubleValue(48));
+            if (mcs >= 0)
+            {
+                wifiApC.SetRemoteStationManager(nLinksApC,
+                                            "ns3::ConstantRateWifiManager",
+                                            "DataMode",
+                                            StringValue(dataModeStr),
+                                            "ControlMode",
+                                            StringValue(dataModeStr));
+            }
+            else 
+            {
+                wifiApC.SetRemoteStationManager(nLinksApC,
+                                            "ns3::MinstrelHtWifiManager");
+            }
+        }
+        else if (freq == 5)
+        {
+            channelStrApC[nLinksApC] = "{36, " + segmentWidthStr + ", ";
+            channelStrApC[nLinksApC] += "BAND_5GHZ, 0}";
+            freqRangesApC[nLinksApC] = WIFI_SPECTRUM_5_GHZ;
+            if (mcs >= 0)
+            {
+                ctrlRateStr = "OfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
+                wifiApC.SetRemoteStationManager(nLinksApC,
+                                            "ns3::ConstantRateWifiManager",
+                                            "DataMode",
+                                            StringValue(dataModeStr),
+                                            "ControlMode",
+                                            StringValue(dataModeStr));
+            }
+            else 
+            {
+                wifiApC.SetRemoteStationManager(nLinksApC,
+                                            "ns3::MinstrelHtWifiManager");
+            }
+        }
+        else if (freq == 2.4)
+        {
+            channelStrApC[nLinksApC] = "{1, " + segmentWidthStr + ", ";
+            channelStrApC[nLinksApC] += "BAND_2_4GHZ, 0}";
+            freqRangesApC[nLinksApC] = WIFI_SPECTRUM_2_4_GHZ;
+            Config::SetDefault("ns3::LogDistancePropagationLossModel::ReferenceLoss",
+                                DoubleValue(40));
+            ctrlRateStr = "ErpOfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
+            if (mcs >= 0)
+            {
+                ctrlRateStr = "OfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
+                wifiApC.SetRemoteStationManager(nLinksApC,
+                                            "ns3::ConstantRateWifiManager",
+                                            "DataMode",
+                                            StringValue(dataModeStr),
+                                            "ControlMode",
+                                            StringValue(dataModeStr));
+            }
+            else 
+            {
+                wifiApC.SetRemoteStationManager(nLinksApC,
+                                            "ns3::MinstrelHtWifiManager");
+            }
+        }
+        else
+        {
+            NS_FATAL_ERROR("Wrong frequency value!");
+        }
+
+        if (is80Plus80)
+        {
+            channelStrApC[nLinksApC] += std::string(";") + channelStrApC[nLinksApC];
+        }
+
+        nLinksApC++;
+    }
         
     // Check if multi-link is used!!
     if (nLinksSta > 1 && !emlsrLinks.empty())
@@ -773,6 +876,7 @@ main(int argc, char* argv[])
         wifiSta.ConfigEhtOptions("EnableMultiApCoordination", BooleanValue(true));
         wifiApA.ConfigEhtOptions("EnableMultiApCoordination", BooleanValue(true));
         wifiApB.ConfigEhtOptions("EnableMultiApCoordination", BooleanValue(true));
+        wifiApC.ConfigEhtOptions("EnableMultiApCoordination", BooleanValue(true));
     }
 
     if(reliabilityMode)
@@ -783,6 +887,7 @@ main(int argc, char* argv[])
     std::cout << "nLinksSta : " << (int)nLinksSta << std::endl;
     std::cout << "nLinksApA : " << (int)nLinksApA << std::endl;
     std::cout << "nLinksApB : " << (int)nLinksApB << std::endl;
+    std::cout << "nLinksApC : " << (int)nLinksApC << std::endl;
     
     // Setup the EMLSR manager!!!
     mac.SetEmlsrManager("ns3::DefaultEmlsrManager",
@@ -837,7 +942,7 @@ main(int argc, char* argv[])
     phySta.Set("CcaEdThreshold", DoubleValue(ccaEdTrSta));
     phySta.Set("RxSensitivity", DoubleValue(-92.0));
 
-    mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid));\
+    mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid));
     staDevices.Add(wifiSta.Install(phySta, mac, wifiStaNodes.Get(0)));
 
     SpectrumWifiPhyHelper phyApA(nLinksApA);
@@ -939,6 +1044,61 @@ main(int argc, char* argv[])
 
     apDevices.Add(wifiApB.Install(phyApB, mac, wifiApNodes.Get(1)));  
 
+    SpectrumWifiPhyHelper phyApC(nLinksApC);
+
+    phyApC.SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
+    phyApC.Set("ChannelSwitchDelay", TimeValue(MicroSeconds(channelSwitchDelayUsec)));
+
+    // Sets up multiple link in the physical layer
+    for (uint8_t linkId = 0; linkId < nLinksApC; linkId++)
+    {
+        phyApC.Set(linkId, "ChannelSettings", StringValue(channelStrApC[linkId]));
+        if (findSubstring(channelStrApC[linkId],"5GHZ"))
+        {
+            phyApC.AddChannel(spectrumChannel5, freqRangesApC[linkId]);
+        }
+        else if (findSubstring(channelStrApC[linkId],"6GHZ"))
+        {
+            phyApC.AddChannel(spectrumChannel6, freqRangesApC[linkId]);
+        }
+        else if (findSubstring(channelStrApC[linkId],"2_4GHZ"))
+        {
+            phyApC.AddChannel(spectrumChannel2_4, freqRangesApC[linkId]);
+        }
+    }
+
+    if (dlAckSeqType != "NO-OFDMA")
+    {
+        mac.SetMultiUserScheduler("ns3::RrMultiUserScheduler",
+                                    "EnableUlOfdma",
+                                    BooleanValue(enableUlOfdma),
+                                    "EnableBsrp",
+                                    BooleanValue(enableBsrp),
+                                    "AccessReqInterval",
+                                    TimeValue(accessReqInterval));
+    }
+
+    phyApC.Set ("TxPowerStart", DoubleValue (powAp3));
+    phyApC.Set ("TxPowerEnd", DoubleValue (powAp3));
+    phyApC.Set ("TxPowerLevels", UintegerValue (1));
+    phyApC.Set("CcaEdThreshold", DoubleValue(ccaEdTrAp3));
+    phyApC.Set("RxSensitivity", DoubleValue(-92.0));
+
+    mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
+
+    if (dlAckSeqType != "NO-OFDMA")
+    {
+        mac.SetMultiUserScheduler("ns3::RrMultiUserScheduler",
+                                    "EnableUlOfdma",
+                                    BooleanValue(enableUlOfdma),
+                                    "EnableBsrp",
+                                    BooleanValue(enableBsrp),
+                                    "AccessReqInterval",
+                                    TimeValue(accessReqInterval));
+    }
+
+    apDevices.Add(wifiApC.Install(phyApC, mac, wifiApNodes.Get(2)));
+
     // Set guard interval and MPDU buffer size
     Config::Set(
         "/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/HeConfiguration/GuardInterval",
@@ -950,9 +1110,10 @@ main(int argc, char* argv[])
     MobilityHelper mobility;
     Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator>();
 
-    positionAlloc->Add(Vector(0.0, 0.0, 0.0));
+    positionAlloc->Add(Vector(distance, distance, 0.0));
     positionAlloc->Add(Vector(distance, 0.0, 0.0));
     positionAlloc->Add(Vector(0.0, distance, 0.0));
+    positionAlloc->Add(Vector(2*distance, distance, 0.0));
     mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     mobility.SetPositionAllocator(positionAlloc);
     mobility.Install(wifiStaNodes);
@@ -1003,7 +1164,7 @@ main(int argc, char* argv[])
 
         serverApp.Start(Seconds(0.0));
         serverApp.Stop(simulationTime + Seconds(1.0));
-        const auto packetInterval = payloadSize * 8.0 / maxLoad;
+        const auto packetInterval = payloadSize * 8.0 / (maxLoad);
 
         for (std::size_t i = 0; i < nStations; i++)
         {
@@ -1052,10 +1213,10 @@ main(int argc, char* argv[])
 
 
     // Enable tracing
-    // Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpClient/Tx", MakeCallback(&AppTxTrace));
-    // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTx", MakeCallback(&DevTxTrace));
+    Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpClient/Tx", MakeCallback(&AppTxTrace));
+    Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTx", MakeCallback(&DevTxTrace));
     // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTxDrop", MakeCallback(&DevTxDropTrace));
-    // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRx", MakeCallback(&DevRxTrace));
+    Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRx", MakeCallback(&DevRxTrace));
     // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRxDrop", MakeCallback(&DevRxDropTrace));
     // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/AckedMpdu", MakeCallback(&DevAckedMpduTrace));
     // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/DroppedMpdu", MakeCallback(&DevDroppedMpduTrace));

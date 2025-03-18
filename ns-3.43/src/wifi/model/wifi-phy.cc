@@ -1870,15 +1870,18 @@ WifiPhy::Send(const WifiConstPsduMap& psdus, const WifiTxVector& txVector)
     if (m_powerRestricted)
     {
         NS_LOG_DEBUG("Transmitting with power restriction for " << txDuration.As(Time::NS));
+        NS_LOG_INFO("Transmitting with power restriction for " << txDuration.As(Time::NS));
     }
     else
     {
         NS_LOG_DEBUG("Transmitting without power restriction for " << txDuration.As(Time::NS));
+        NS_LOG_INFO("Transmitting with power restriction for " << txDuration.As(Time::NS));
     }
 
     if (m_state->GetState() == WifiPhyState::OFF)
     {
         NS_LOG_DEBUG("Transmission canceled because device is OFF");
+        NS_LOG_INFO("Transmitting with power restriction for " << txDuration.As(Time::NS));
         return;
     }
 

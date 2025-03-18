@@ -213,8 +213,13 @@ class ApplicationContainer
      */
     void Stop(Time stop) const;
 
+    void DesignatePacketToSend() const;
+
+    void EnableReliabilityMode();
+
   private:
     std::vector<Ptr<Application>> m_applications; //!< Applications smart pointers
+    bool m_enableReliabilityMode{false};
 };
 
 } // namespace ns3
