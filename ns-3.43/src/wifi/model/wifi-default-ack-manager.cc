@@ -473,6 +473,8 @@ WifiDefaultAckManager::GetAckInfoIfBarBaSequence(Ptr<const WifiMpdu> mpdu,
 
         NS_LOG_DEBUG("Adding STA " << receiver
                                    << " to the list of stations receiving a BlockAckReq");
+        NS_LOG_INFO("Adding STA " << receiver
+                                   << " to the list of stations receiving a BlockAckReq");
         acknowledgment->stationsSendBlockAckReqTo.emplace(
             receiver,
             WifiDlMuBarBaSequence::BlockAckReqInfo{
@@ -499,6 +501,8 @@ WifiDefaultAckManager::GetAckInfoIfBarBaSequence(Ptr<const WifiMpdu> mpdu,
     }
 
     NS_LOG_DEBUG("Adding STA " << receiver
+                               << " as the station that will immediately reply with a Normal Ack");
+    NS_LOG_INFO("Adding STA " << receiver
                                << " as the station that will immediately reply with a Normal Ack");
     acknowledgment->stationsReplyingWithNormalAck.emplace(
         receiver,

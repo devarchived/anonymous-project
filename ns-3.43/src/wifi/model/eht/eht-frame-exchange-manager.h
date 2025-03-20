@@ -238,6 +238,8 @@ class EhtFrameExchangeManager : public HeFrameExchangeManager
                               //!< we are not the holder)
     std::unordered_map<Mac48Address, EventId, WifiAddressHash>
         m_transDelayTimer; //!< MLD address-indexed map of transition delay timers
+    
+    std::unordered_map<uint8_t, uint16_t, EventId> m_duplicateAckTimer;
 };
 
 } // namespace ns3

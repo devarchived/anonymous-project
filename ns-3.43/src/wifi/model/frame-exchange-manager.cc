@@ -1469,4 +1469,10 @@ FrameExchangeManager::EndReceiveAmpdu(Ptr<const WifiPsdu> psdu,
     NS_ASSERT_MSG(false, "A non-QoS station should not receive an A-MPDU");
 }
 
+void
+FrameExchangeManager::FilterDuplicatePackets()
+{
+    NS_LOG_FUNCTION(this);
+}
+
 } // namespace ns3

@@ -632,6 +632,40 @@ BlockAckManager::NotifyGotMpdu(Ptr<const WifiMpdu> mpdu)
     it->second.NotifyReceivedMpdu(mpdu);
 }
 
+void
+BlockAckManager::PseudoGotMpdu(Ptr<const WifiMpdu> mpdu)
+{
+    NS_LOG_FUNCTION(this << *mpdu);
+    
+    auto originator = mpdu->GetOriginal()->GetHeader().GetAddr2();
+    NS_ASSERT(mpdu->GetHeader().IsQosData());
+    auto tid = mpdu->GetHeader().GetQosTid();
+
+    auto it = m_recipientAgreements.find({originator, tid});
+    if (it == m_recipientAgreements.end())
+    {
+        return;
+    }
+    it->second.PseudoReceivedMpdu(mpdu);
+}
+
+void
+BlockAckManager::PseudoGotMpduPerLink(Ptr<const WifiMpdu> mpdu, Mac48Address destLinkAddress)
+{
+    NS_LOG_FUNCTION(this << *mpdu);
+    
+    auto originator = destLinkAddress;
+    NS_ASSERT(mpdu->GetHeader().IsQosData());
+    auto tid = mpdu->GetHeader().GetQosTid();
+
+    auto it = m_recipientAgreements.find({originator, tid});
+    if (it == m_recipientAgreements.end())
+    {
+        return;
+    }
+    it->second.PseudoReceivedMpdu(mpdu);
+}
+
 CtrlBAckRequestHeader
 BlockAckManager::GetBlockAckReqHeader(const Mac48Address& recipient, uint8_t tid) const
 {

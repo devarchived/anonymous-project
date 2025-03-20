@@ -73,6 +73,8 @@ class FrameExchangeManager : public Object
      */
     typedef Callback<void, Ptr<const WifiMpdu>> AckedMpdu;
 
+    void FilterDuplicatePackets();
+
     /**
      * Request the FrameExchangeManager to start a frame exchange sequence.
      *

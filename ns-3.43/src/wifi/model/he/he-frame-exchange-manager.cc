@@ -2176,6 +2176,8 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                                     const WifiTxVector& txVector,
                                     bool inAmpdu)
 {
+    NS_LOG_FUNCTION(this << *mpdu);
+
     // The received MPDU is either broadcast or addressed to this station
     NS_ASSERT(mpdu->GetHeader().GetAddr1().IsGroup() || mpdu->GetHeader().GetAddr1() == m_self);
 
@@ -2219,6 +2221,7 @@ HeFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
         else if (hdr.IsQosData() && !inAmpdu && hdr.GetQosAckPolicy() == WifiMacHeader::NORMAL_ACK)
         {
             NS_LOG_DEBUG("Received an S-MPDU in a TB PPDU from " << sender << " (" << *mpdu << ")");
+            NS_LOG_INFO("Received an S-MPDU in a TB PPDU from " << sender << " (" << *mpdu << ")");
 
             uint8_t tid = hdr.GetQosTid();
             GetBaManager(tid)->NotifyGotMpdu(mpdu);

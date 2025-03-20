@@ -223,6 +223,11 @@ class BlockAckManager : public Object
      * Perform required actions upon receiving an MPDU.
      */
     void NotifyGotMpdu(Ptr<const WifiMpdu> mpdu);
+
+    void PseudoGotMpdu(Ptr<const WifiMpdu> mpdu);
+
+    void PseudoGotMpduPerLink(Ptr<const WifiMpdu> mpdu, Mac48Address destLinkAddress);
+
     /**
      * \param recipient Address of peer station involved in block ack mechanism.
      * \param tid Traffic ID.

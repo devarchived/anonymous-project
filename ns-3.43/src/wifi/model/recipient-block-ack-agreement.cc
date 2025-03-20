@@ -171,6 +171,27 @@ RecipientBlockAckAgreement::NotifyReceivedMpdu(Ptr<const WifiMpdu> mpdu)
 }
 
 void
+RecipientBlockAckAgreement::PseudoReceivedMpdu(Ptr<const WifiMpdu> mpdu)
+{
+    NS_LOG_FUNCTION(this << *mpdu);
+    
+    uint16_t mpduSeqNumber = mpdu->GetHeader().GetSequenceNumber();
+    uint16_t distance = GetDistance(mpduSeqNumber, m_scoreboard.GetWinStart());
+
+    /* Update the scoreboard (see Section 10.24.7.3 of 802.11-2016) */
+    if (distance < m_scoreboard.GetWinSize())
+    {
+        // set to 1 the bit in position SN within the bitmap
+        m_scoreboard.At(distance) = true;
+    }
+    else if (distance < SEQNO_SPACE_HALF_SIZE)
+    {
+        m_scoreboard.Advance(distance - m_scoreboard.GetWinSize() + 1);
+        m_scoreboard.At(m_scoreboard.GetWinSize() - 1) = true;
+    }
+}
+
+void
 RecipientBlockAckAgreement::Flush()
 {
     NS_LOG_FUNCTION(this);
@@ -239,6 +260,7 @@ RecipientBlockAckAgreement::FillBlockAckBitmap(CtrlBAckResponseHeader* blockAckH
         // We set it to WinStartR
         uint16_t ssn = m_scoreboard.GetWinStart();
         NS_LOG_DEBUG("SSN=" << ssn);
+        NS_LOG_INFO("SSN=" << ssn);
         blockAckHeader->SetStartingSequence(ssn, index);
         blockAckHeader->ResetBitmap(index);
 

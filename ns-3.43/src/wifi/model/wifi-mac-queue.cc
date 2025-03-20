@@ -36,7 +36,7 @@ WifiMacQueue::GetTypeId()
             .AddConstructor<WifiMacQueue>()
             .AddAttribute("MaxSize",
                           "The max queue size",
-                          QueueSizeValue(QueueSize("5000p")),
+                          QueueSizeValue(QueueSize("500p")),
                           MakeQueueSizeAccessor(&QueueBase::SetMaxSize, &QueueBase::GetMaxSize),
                           MakeQueueSizeChecker())
             .AddAttribute("MaxDelay",

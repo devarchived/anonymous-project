@@ -1127,6 +1127,8 @@ EhtFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                                      const WifiTxVector& txVector,
                                      bool inAmpdu)
 {
+    NS_LOG_FUNCTION(this << *mpdu);
+
     // The received MPDU is either broadcast or addressed to this station
     NS_ASSERT(mpdu->GetHeader().GetAddr1().IsGroup() || mpdu->GetHeader().GetAddr1() == m_self);
 
@@ -1222,10 +1224,19 @@ EhtFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
         {
             NS_LOG_INFO("[link=" << +m_linkId << "] New mpdu with sequence number " << mpdu->GetHeader().GetSequenceNumber() << " forwarded up");
             rxQueue.push_back(mpdu);
+            for(int i = 0; i < m_mac->GetNLinks(); i++)
+            {
+                if(i != m_linkId)
+                {
+                    NS_LOG_INFO("Requesting block ACK for AP " << m_mac->GetBssid(i));
+                    HeFrameExchangeManager::RequestBlockAckPerLink(mpdu, m_mac->GetBssid(i),rxSignalInfo, txVector, inAmpdu);
+                }
+            }
         }
         else if(rxCount < m_mac->GetNLinks() - 1)
         {
             NS_LOG_INFO("[link=" << +m_linkId << "] Duplicate mpdu with sequence number " << mpdu->GetHeader().GetSequenceNumber() << " not forwarded up");
+            // HeFrameExchangeManager::SendDuplicateAck(mpdu, rxSignalInfo, txVector, inAmpdu);
             rxQueue.push_back(mpdu);
             return;
         }
@@ -1233,15 +1244,18 @@ EhtFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
         {
             NS_LOG_INFO("[link=" << +m_linkId << "] Duplicate mpdu with sequence number " << mpdu->GetHeader().GetSequenceNumber() << " not forwarded up");
             NS_LOG_INFO("All duplicate packets sucesfully received");
+            // HeFrameExchangeManager::SendDuplicateAck(mpdu, rxSignalInfo, txVector, inAmpdu);
             for (auto it = rxQueue.begin(); it != rxQueue.end(); ++it)
             {
-                std::cout << (*it)->GetHeader().GetSequenceNumber() << std::endl;
-                // std::cout << "Isi queue " <<  *it->GetHeader().GetSequenceNumber() << std::endl;
-                // if(mpdu->GetHeader().GetSequenceNumber() != 0 && mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
-                if(mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
+                if (*it)
                 {
-                    it = rxQueue.erase(it);
+                    // if(mpdu->GetHeader().GetSequenceNumber() != 0 && mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
+                    if(mpdu && mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
+                    {
+                        it = rxQueue.erase(it);
+                    }
                 }
+                else break;
             }
             return;
         }

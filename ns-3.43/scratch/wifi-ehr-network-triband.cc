@@ -289,7 +289,7 @@ main(int argc, char* argv[])
     bool switchAuxPhy{true};
     uint16_t auxPhyChWidth{20};
     bool auxPhyTxCapable{true};
-    Time simulationTime{"0.2s"};
+    Time simulationTime{"1s"};
     meter_u distance{2.0};
     double frequencySta{5};  // whether the first link operates in the 2.4, 5 or 6 GHz
     double frequencySta_2{6}; // whether the second link operates in the 2.4, 5 or 6 GHz (0 means no

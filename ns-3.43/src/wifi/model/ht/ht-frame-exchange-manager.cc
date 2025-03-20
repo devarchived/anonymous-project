@@ -1516,6 +1516,8 @@ HtFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                                     const WifiTxVector& txVector,
                                     bool inAmpdu)
 {
+    NS_LOG_FUNCTION(this << *mpdu);
+
     // The received MPDU is either broadcast or addressed to this station
     NS_ASSERT(mpdu->GetHeader().GetAddr1().IsGroup() || mpdu->GetHeader().GetAddr1() == m_self);
 
@@ -1639,12 +1641,13 @@ HtFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
         {
             // a Block Ack agreement has been established
             NS_LOG_DEBUG("Received from=" << hdr.GetAddr2() << " (" << *mpdu << ")");
-
+            NS_LOG_INFO("Received from=" << hdr.GetAddr2() << " (" << *mpdu << ")");
             GetBaManager(tid)->NotifyGotMpdu(mpdu);
 
             if (!inAmpdu && hdr.GetQosAckPolicy() == WifiMacHeader::NORMAL_ACK)
             {
                 NS_LOG_DEBUG("Schedule Normal Ack");
+                NS_LOG_INFO("Schedule Normal Ack");
                 Simulator::Schedule(m_phy->GetSifs(),
                                     &HtFrameExchangeManager::SendNormalAck,
                                     this,
@@ -1664,6 +1667,81 @@ HtFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
     }
 
     QosFrameExchangeManager::ReceiveMpdu(mpdu, rxSignalInfo, txVector, inAmpdu);
+}
+
+void
+HtFrameExchangeManager::SendDuplicateAck(Ptr<const WifiMpdu> mpdu,
+                                    RxSignalInfo rxSignalInfo,
+                                    const WifiTxVector& txVector,
+                                    bool inAmpdu)
+{
+    NS_LOG_FUNCTION(this << *mpdu);
+
+    // The received MPDU is either broadcast or addressed to this station
+    NS_ASSERT(mpdu->GetHeader().GetAddr1().IsGroup() || mpdu->GetHeader().GetAddr1() == m_self);
+
+    double rxSnr = rxSignalInfo.snr;
+    const WifiMacHeader& hdr = mpdu->GetHeader();
+    
+    if (hdr.IsQosData() && hdr.HasData() && hdr.GetAddr1() == m_self)
+    {
+        uint8_t tid = hdr.GetQosTid();
+
+        if (m_mac->GetBaAgreementEstablishedAsRecipient(hdr.GetAddr2(), tid))
+        {
+            // a Block Ack agreement has been established
+            NS_LOG_INFO("Duplicate ACK for a packet received from=" << hdr.GetAddr2() << " (" << *mpdu << ")");
+            GetBaManager(tid)->PseudoGotMpdu(mpdu);
+
+            if (!inAmpdu && hdr.GetQosAckPolicy() == WifiMacHeader::NORMAL_ACK)
+            {
+                NS_LOG_DEBUG("Schedule Normal Ack");
+                NS_LOG_INFO("Schedule Normal Ack");
+                Simulator::Schedule(m_phy->GetSifs(),
+                                    &HtFrameExchangeManager::SendNormalAck,
+                                    this,
+                                    hdr,
+                                    txVector,
+                                    rxSnr);
+            }
+            return;
+        }
+        // We let the QosFrameExchangeManager handle QoS data frame not belonging
+        // to a Block Ack agreement
+    }
+    return;
+}
+
+void
+HtFrameExchangeManager::RequestBlockAckPerLink(Ptr<const WifiMpdu> mpdu,
+                                    Mac48Address destLinkAddress,
+                                    RxSignalInfo rxSignalInfo,
+                                    const WifiTxVector& txVector,
+                                    bool inAmpdu)
+{
+    NS_LOG_FUNCTION(this << *mpdu);
+
+    // The received MPDU is either broadcast or addressed to this station
+    NS_ASSERT(mpdu->GetHeader().GetAddr1().IsGroup() || mpdu->GetHeader().GetAddr1() == m_self);
+
+    double rxSnr = rxSignalInfo.snr;
+    const WifiMacHeader& hdr = mpdu->GetHeader();
+    
+    if (hdr.IsQosData() && hdr.HasData() && hdr.GetAddr1() == m_self)
+    {
+        uint8_t tid = hdr.GetQosTid();
+
+        if (m_mac->GetBaAgreementEstablishedAsRecipient(destLinkAddress, tid))
+        {
+            // a Block Ack agreement has been established
+            NS_LOG_INFO("Duplicate ACK for a packet received from=" << destLinkAddress << " (" << *mpdu << ")");
+            GetBaManager(tid)->PseudoGotMpduPerLink(mpdu,destLinkAddress);
+            return;
+        }
+        // We let the QosFrameExchangeManager handle QoS data frame not belonging
+        // to a Block Ack agreement
+    }
+    return;
 }
 
 void

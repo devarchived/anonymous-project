@@ -157,6 +157,17 @@ class HtFrameExchangeManager : public QosFrameExchangeManager
                          std::optional<uint8_t> optTid = std::nullopt,
                          std::optional<Mac48Address> optAddress = std::nullopt);
 
+    void SendDuplicateAck(Ptr<const WifiMpdu> mpdu,
+                                    RxSignalInfo rxSignalInfo,
+                                    const WifiTxVector& txVector,
+                                    bool inAmpdu);
+    
+    void RequestBlockAckPerLink(Ptr<const WifiMpdu> mpdu,
+                                    Mac48Address destLinkAddress,
+                                    RxSignalInfo rxSignalInfo,
+                                    const WifiTxVector& txVector,
+                                    bool inAmpdu);
+
   protected:
     void DoDispose() override;
 

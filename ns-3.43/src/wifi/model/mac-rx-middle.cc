@@ -272,11 +272,16 @@ MacRxMiddle::Receive(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
         NS_LOG_DEBUG("Sequence numbers have looped back. last recorded="
                      << originator.GetLastSequenceControl()
                      << " currently seen=" << hdr.GetSequenceControl());
+        NS_LOG_INFO("Sequence numbers have looped back. last recorded="
+                     << originator.GetLastSequenceControl()
+                     << " currently seen=" << hdr.GetSequenceControl());
     }
     // filter duplicates.
     if (IsDuplicate(hdr, originator))
     {
         NS_LOG_DEBUG("duplicate from=" << hdr.GetAddr2() << ", seq=" << hdr.GetSequenceNumber()
+                                       << ", frag=" << +hdr.GetFragmentNumber());
+        NS_LOG_INFO("duplicate from=" << hdr.GetAddr2() << ", seq=" << hdr.GetSequenceNumber()
                                        << ", frag=" << +hdr.GetFragmentNumber());
         return;
     }
@@ -286,6 +291,8 @@ MacRxMiddle::Receive(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
         return;
     }
     NS_LOG_DEBUG("forwarding data from=" << hdr.GetAddr2() << ", seq=" << hdr.GetSequenceNumber()
+                                         << ", frag=" << +hdr.GetFragmentNumber());
+    NS_LOG_INFO("forwarding data from=" << hdr.GetAddr2() << ", seq=" << hdr.GetSequenceNumber()
                                          << ", frag=" << +hdr.GetFragmentNumber());
     if (!hdr.GetAddr1().IsGroup())
     {

@@ -62,6 +62,9 @@ class RecipientBlockAckAgreement : public BlockAckAgreement
      * \param mpdu the received MPDU
      */
     void NotifyReceivedMpdu(Ptr<const WifiMpdu> mpdu);
+
+    void PseudoReceivedMpdu(Ptr<const WifiMpdu> mpdu);
+
     /**
      * Update both the scoreboard and the receive reordering buffer upon reception
      * of a Block Ack Request.
