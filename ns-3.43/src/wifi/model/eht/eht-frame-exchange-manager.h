@@ -240,6 +240,8 @@ class EhtFrameExchangeManager : public HeFrameExchangeManager
         m_transDelayTimer; //!< MLD address-indexed map of transition delay timers
     
     std::unordered_map<uint8_t, uint16_t, EventId> m_duplicateAckTimer;
+
+    EventId m_deleteDuplicatePackets;
 };
 
 } // namespace ns3

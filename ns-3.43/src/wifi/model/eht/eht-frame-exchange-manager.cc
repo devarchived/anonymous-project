@@ -1202,28 +1202,25 @@ EhtFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
         return;
     }
 
-    if((hdr.IsData() || hdr.IsQosData()) && m_mac->ReliabilityModeEnabled())
+    if(m_staMac && (m_mac->GetNLinks() > 1) && (hdr.IsData() || hdr.IsQosData()) && m_mac->ReliabilityModeEnabled())
     {
         uint32_t rxCount = 0;
-        auto& rxQueue = m_mac->GetRxQueue();
+        auto& ackQueue = m_mac->GetAckQueue();
         std::vector<ns3::Ptr<const ns3::WifiMpdu>>::iterator duplicateIt;
-
-        for (auto it = rxQueue.begin(); it != rxQueue.end(); ++it)
+        
+        for (auto it = ackQueue.begin(); it != ackQueue.end(); ++it)
         {
-            // std::cout << "Isi queue " <<  *it->GetHeader().GetSequenceNumber() << std::endl;
-            // if(mpdu->GetHeader().GetSequenceNumber() != 0 && mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
-            if(mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
+            if(mpdu->GetPacket()->GetUid() == *it)
             {
                 rxCount++;
-                duplicateIt = it;
             }
         }
 
         NS_LOG_INFO("Duplicate packet count " << rxCount);
         if (rxCount == 0)
         {
-            NS_LOG_INFO("[link=" << +m_linkId << "] New mpdu with sequence number " << mpdu->GetHeader().GetSequenceNumber() << " forwarded up");
-            rxQueue.push_back(mpdu);
+            NS_LOG_INFO("[link=" << +m_linkId << "] New packet with Uid " << mpdu->GetPacket()->GetUid() << " forwarded up");
+            ackQueue.push_back(mpdu->GetPacket()->GetUid());
             for(int i = 0; i < m_mac->GetNLinks(); i++)
             {
                 if(i != m_linkId)
@@ -1233,32 +1230,92 @@ EhtFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                 }
             }
         }
-        else if(rxCount < m_mac->GetNLinks() - 1)
+        else if((m_mac->GetNLinks() > 1) && (rxCount < m_mac->GetNLinks() - 1))
         {
-            NS_LOG_INFO("[link=" << +m_linkId << "] Duplicate mpdu with sequence number " << mpdu->GetHeader().GetSequenceNumber() << " not forwarded up");
-            // HeFrameExchangeManager::SendDuplicateAck(mpdu, rxSignalInfo, txVector, inAmpdu);
-            rxQueue.push_back(mpdu);
+            NS_LOG_INFO("[link=" << +m_linkId << "] Duplicate packet with Uid " << mpdu->GetPacket()->GetUid() << " not forwarded up");
+            ackQueue.push_back(mpdu->GetPacket()->GetUid());
             return;
         }
         else
         {
-            NS_LOG_INFO("[link=" << +m_linkId << "] Duplicate mpdu with sequence number " << mpdu->GetHeader().GetSequenceNumber() << " not forwarded up");
+            NS_LOG_INFO("[link=" << +m_linkId << "] Duplicate packet with Uid " << mpdu->GetPacket()->GetUid() << " not forwarded up");
             NS_LOG_INFO("All duplicate packets sucesfully received");
-            // HeFrameExchangeManager::SendDuplicateAck(mpdu, rxSignalInfo, txVector, inAmpdu);
-            for (auto it = rxQueue.begin(); it != rxQueue.end(); ++it)
+            for (auto it = ackQueue.begin(); it != ackQueue.end();)//; ++it)
             {
                 if (*it)
                 {
-                    // if(mpdu->GetHeader().GetSequenceNumber() != 0 && mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
-                    if(mpdu && mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
+                    if(mpdu && mpdu->GetPacket()->GetUid() == *it)
                     {
-                        it = rxQueue.erase(it);
+                        it = ackQueue.erase(it);
+                    }
+                    else 
+                    {
+                        // loop does not increment after erasing
+                        ++it;
                     }
                 }
                 else break;
             }
-            return;
         }
+
+        // for (auto it = rxQueue.begin(); it != rxQueue.end(); ++it)
+        // {
+        //     // std::cout << "Isi queue " <<  *it->GetHeader().GetSequenceNumber() << std::endl;
+        //     // if(mpdu->GetHeader().GetSequenceNumber() != 0 && mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
+        //     if(mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
+        //     {
+        //         rxCount++;
+        //         duplicateIt = it;
+        //     }
+        // }
+
+        // NS_LOG_INFO("Duplicate packet count " << rxCount);
+        // if (rxCount == 0)
+        // {
+        //     NS_LOG_INFO("[link=" << +m_linkId << "] New mpdu with sequence number " << mpdu->GetHeader().GetSequenceNumber() << " forwarded up");
+        //     rxQueue.push_back(mpdu);
+        //     // m_deleteDuplicatePackets = Simulator::Schedule(mpdu->GetOriginal()->GetExpiryTime()-Simulator::Now()-MicroSeconds(10),&EhtFrameExchangeManager::DeleteDuplicatePackets, this, mpdu, rxSignalInfo, txVector, inAmpdu);
+        //     for(int i = 0; i < m_mac->GetNLinks(); i++)
+        //     {
+        //         if(i != m_linkId)
+        //         {
+        //             NS_LOG_INFO("Requesting block ACK for AP " << m_mac->GetBssid(i));
+        //             // HeFrameExchangeManager::RequestBlockAckPerLink(mpdu, m_mac->GetBssid(i),rxSignalInfo, txVector, inAmpdu);
+        //         }
+        //     }
+        // }
+        // else if((m_mac->GetNLinks() > 1) && (rxCount < m_mac->GetNLinks() - 1))
+        // {
+        //     NS_LOG_INFO("[link=" << +m_linkId << "] Duplicate mpdu with sequence number " << mpdu->GetHeader().GetSequenceNumber() << " not forwarded up");
+        //     // HeFrameExchangeManager::SendDuplicateAck(mpdu, rxSignalInfo, txVector, inAmpdu);
+        //     rxQueue.push_back(mpdu);
+        //     return;
+        // }
+        // else
+        // {
+        //     NS_LOG_INFO("[link=" << +m_linkId << "] Duplicate mpdu with sequence number " << mpdu->GetHeader().GetSequenceNumber() << " not forwarded up");
+        //     NS_LOG_INFO("All duplicate packets sucesfully received");
+        //     // HeFrameExchangeManager::SendDuplicateAck(mpdu, rxSignalInfo, txVector, inAmpdu);
+        //     // m_deleteDuplicatePackets.Cancel();
+        //     for (auto it = rxQueue.begin(); it != rxQueue.end();)//; ++it)
+        //     {
+        //         if (*it)
+        //         {
+        //             // if(mpdu->GetHeader().GetSequenceNumber() != 0 && mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
+        //             if(mpdu && mpdu->GetHeader().GetSequenceNumber() == (*it)->GetHeader().GetSequenceNumber())
+        //             {
+        //                 it = rxQueue.erase(it);
+        //             }
+        //             else 
+        //             {
+        //                 // loop does not increment after erasing
+        //                 ++it;
+        //             }
+        //         }
+        //         else break;
+        //     }
+        //     return;
+        // }
     }
 
     HeFrameExchangeManager::ReceiveMpdu(mpdu, rxSignalInfo, txVector, inAmpdu);

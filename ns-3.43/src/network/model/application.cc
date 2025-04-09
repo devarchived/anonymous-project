@@ -164,4 +164,16 @@ Application::GetInterval()
     return timeValue;
 }
 
+void  
+Application::SetInterval(Time newInterval)
+{
+    
+}
+
+double 
+Application::GetPoissonLambda()
+{
+    return 0;
+}
+
 } // namespace ns3

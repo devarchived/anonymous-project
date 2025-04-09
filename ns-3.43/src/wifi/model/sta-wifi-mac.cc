@@ -462,7 +462,6 @@ MultiLinkElement
 StaWifiMac::GetMultiLinkElement(bool isReassoc, uint8_t linkId) const
 {
     NS_LOG_FUNCTION(this << isReassoc << +linkId);
-    std::cout << "Debug StaWifiMac::GetMultiLinkElement() " << std::endl;
 
     MultiLinkElement multiLinkElement(MultiLinkElement::BASIC_VARIANT);
     // The Common info field of the Basic Multi-Link element carried in the (Re)Association
@@ -615,7 +614,8 @@ StaWifiMac::GetTidToLinkMappingElements(WifiTidToLinkMappingNegSupport apNegSupp
 void
 StaWifiMac::SendAssociationRequest(bool isReassoc)
 {
-    std::cout << "Debug SendAssociationRequest() for number of links : " << (int)GetNLinks() << std::endl;
+    NS_LOG_FUNCTION(this << GetNLinks());
+
     if (MultiApCoordinationEnabled())
     {
         for (auto it = GetLinks().cbegin(); it != GetLinks().cend(); ++it)
@@ -623,11 +623,11 @@ StaWifiMac::SendAssociationRequest(bool isReassoc)
             uint8_t linkId = it->first;
             auto& link = GetLink(linkId);
             std::cout << "LinkId : " << (int)linkId << " has BSSID " << *link.bssid << std::endl;
+            NS_LOG_INFO("LinkId : " << +linkId << " has BSSID " << *link.bssid);
         }
         for (auto it = GetLinks().cbegin(); it != GetLinks().cend(); ++it)
         {
             uint8_t linkId = it->first;
-            std::cout << "with linkId : " << (int)linkId << std::endl;
             auto& link = GetLink(linkId);
             NS_ABORT_MSG_IF(!link.bssid.has_value(),
                     "No BSSID set for the link on which the (Re)Association Request is to be sent");
@@ -870,7 +870,7 @@ void
 StaWifiMac::ScanningTimeout(const std::optional<ApInfo>& bestAp)
 {
     NS_LOG_FUNCTION(this);
-    std::cout << "Debug StaWifiMac::ScanningTimeout()" << std::endl;
+
     if (!bestAp.has_value())
     {
         NS_LOG_DEBUG("Exhausted list of candidate AP; restart scanning");
@@ -941,7 +941,7 @@ void
 StaWifiMac::ScanningTimeoutMultiAp(std::list<ApInfo> apList)
 {
     NS_LOG_FUNCTION(this);
-    std::cout << "Debug StaWifiMac::ScanningTimeoutMultiAp()" << std::endl;
+
     if (apList.empty())
     {
         NS_LOG_DEBUG("Exhausted list of candidate AP; restart scanning");
@@ -950,10 +950,10 @@ StaWifiMac::ScanningTimeoutMultiAp(std::list<ApInfo> apList)
     }
 
     NS_LOG_DEBUG("Attempting to associate with APs on the list");
+    NS_LOG_INFO("Attempting to associate with APs on the list");
     std::cout << "Attempting to associate with APs on the list" << std::endl;
     for (auto ap = apList.begin(); ap != apList.end(); ++ap)
     {
-        std::cout << "Debug ScanningTimeoutMultiAp() adding AP with MAC Address : " << ap->m_apAddr << std::endl;
         NS_LOG_INFO("Adding AP with MAC Address : " << ap->m_apAddr);
         UpdateApInfo(ap->m_frame, ap->m_apAddr, ap->m_bssid, ap->m_linkId);
     } 
@@ -964,7 +964,7 @@ StaWifiMac::ScanningTimeoutMultiAp(std::list<ApInfo> apList)
         staLink.sendAssocReq = false;
         staLink.bssid = std::nullopt;
     }
-    std::cout << "Debug StaWifiMac::ScanningTimeoutMultiAp() GetLink()" << std::endl;
+
     // send Association Request on the link where the Beacon/Probe Response was received
     for (auto ap = apList.begin(); ap != apList.end(); ++ap)
     {
@@ -1116,7 +1116,7 @@ StaWifiMac::RestartBeaconWatchdog(Time delay)
 bool
 StaWifiMac::IsAssociated() const
 {
-    // std::cout << "Debug StaWifiMac::IsAssociated() in state " << (uint)m_state << std::endl;
+    NS_LOG_FUNCTION(this << m_state);
     return m_state == ASSOCIATED;
 }
 
@@ -1165,7 +1165,6 @@ bool
 StaWifiMac::CanForwardPacketsTo(Mac48Address to) const
 {
     NS_LOG_FUNCTION(this << to);
-    std::cout << "Debug StaWifiMac::CanForwardPacketsTo() as " << IsAssociated() << std::endl;
     return IsAssociated();
 }
 
@@ -1332,6 +1331,55 @@ StaWifiMac::Receive(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
         }
         if (hdr->IsQosData())
         {
+            if(ReliabilityModeEnabled())
+            {
+                uint32_t rxCount = 0;
+                auto& rxQueue = GetRxQueue();
+
+                for (auto it = rxQueue.begin(); it != rxQueue.end(); ++it)
+                {
+                    if(packet->GetUid() == *it)
+                    {
+                        rxCount++;
+                    }
+                }
+
+                NS_LOG_INFO("Duplicate packet count " << rxCount);
+                if (rxCount == 0)
+                {
+                    NS_LOG_INFO("[link=" << +linkId << "] New packet with Uid " << packet->GetUid() << " forwarded up");
+                    rxQueue.push_back(packet->GetUid());
+                }
+                else if((GetNLinks() > 1) && (rxCount < GetNLinks() - 1))
+                {
+                    NS_LOG_INFO("[link=" << +linkId << "] Duplicate packet with Uid " << packet->GetUid() << " not forwarded up");
+                    rxQueue.push_back(packet->GetUid());
+                    return;
+                }
+                else
+                {
+                    NS_LOG_INFO("[link=" << +linkId << "] Duplicate packet with Uid " << packet->GetUid() << " not forwarded up");
+                    NS_LOG_INFO("All duplicate packets sucesfully received");
+                    for (auto it = rxQueue.begin(); it != rxQueue.end();)//; ++it)
+                    {
+                        if (*it)
+                        {
+                            if(packet && packet->GetUid() == *it)
+                            {
+                                it = rxQueue.erase(it);
+                            }
+                            else 
+                            {
+                                // loop does not increment after erasing
+                                ++it;
+                            }
+                        }
+                        else break;
+                    }
+                    return;
+                }
+            }
+
             if (hdr->IsQosAmsdu())
             {
                 NS_ASSERT(apAddresses.contains(mpdu->GetHeader().GetAddr3()));
@@ -1346,6 +1394,55 @@ StaWifiMac::Receive(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
         }
         else
         {
+            if(ReliabilityModeEnabled())
+            {
+                uint32_t rxCount = 0;
+                auto& rxQueue = GetRxQueue();
+
+                for (auto it = rxQueue.begin(); it != rxQueue.end(); ++it)
+                {
+                    if(packet->GetUid() == *it)
+                    {
+                        rxCount++;
+                    }
+                }
+
+                NS_LOG_INFO("Duplicate packet count " << rxCount);
+                if (rxCount == 0)
+                {
+                    NS_LOG_INFO("[link=" << +linkId << "] New packet with Uid " << packet->GetUid() << " forwarded up");
+                    rxQueue.push_back(packet->GetUid());
+                }
+                else if((GetNLinks() > 1) && (rxCount < GetNLinks() - 1))
+                {
+                    NS_LOG_INFO("[link=" << +linkId << "] Duplicate packet with Uid " << packet->GetUid() << " not forwarded up");
+                    rxQueue.push_back(packet->GetUid());
+                    return;
+                }
+                else
+                {
+                    NS_LOG_INFO("[link=" << +linkId << "] Duplicate packet with Uid " << packet->GetUid() << " not forwarded up");
+                    NS_LOG_INFO("All duplicate packets sucesfully received");
+                    for (auto it = rxQueue.begin(); it != rxQueue.end();)//; ++it)
+                    {
+                        if (*it)
+                        {
+                            if(packet && packet->GetUid() == *it)
+                            {
+                                it = rxQueue.erase(it);
+                            }
+                            else 
+                            {
+                                // loop does not increment after erasing
+                                ++it;
+                            }
+                        }
+                        else break;
+                    }
+                    return;
+                }
+            }
+
             NS_LOG_INFO("forwarding frame from=" << hdr->GetAddr3() << ", to=" << hdr->GetAddr1());
             ForwardUp(packet, hdr->GetAddr3(), hdr->GetAddr1());
         }

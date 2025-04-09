@@ -50,6 +50,16 @@ UdpClient::GetTypeId()
                           TimeValue(Seconds(1.0)),
                           MakeTimeAccessor(&UdpClient::m_interval),
                           MakeTimeChecker())
+            .AddAttribute("EnablePoisson",
+                          "If set to true, application send packet using Poisson distribution",
+                          BooleanValue(false),
+                          MakeBooleanAccessor(&UdpClient::m_isPoisson),
+                          MakeBooleanChecker())
+            .AddAttribute("PoissonLambda",
+                          "The arrival rate between packets packets",
+                          DoubleValue(1000),
+                          MakeDoubleAccessor(&UdpClient::m_lambda),
+                          MakeDoubleChecker<double>())
             .AddAttribute("RemoteAddress",
                           "The destination Address of the outbound packets",
                           AddressValue(),
@@ -241,6 +251,13 @@ UdpClient::Send()
     }
 #endif // NS3_LOG_ENABLE
 
+    if (m_isPoisson)
+    {
+        Ptr<ExponentialRandomVariable> x = CreateObject<ExponentialRandomVariable> ();
+        x->SetAttribute ("Mean", DoubleValue(1/m_lambda));
+        m_interval = Seconds(x->GetValue());
+        // std::cout << "Test packetInterval " << m_interval.GetSeconds() << std::endl;
+    }    
     if (m_sent < m_count || m_count == 0)
     {
         m_sendEvent = Simulator::Schedule(m_interval, &UdpClient::Send, this);
@@ -336,12 +353,26 @@ UdpClient::GetInterval()
     return m_interval;
 }
 
+void  
+UdpClient::SetInterval(Time newInterval)
+{
+    m_interval = newInterval;
+}
+
 uint64_t
 UdpClient::GetTotalTx() const
 {
     NS_LOG_FUNCTION(this);
 
     return m_totalTx;
+}
+
+double
+UdpClient::GetPoissonLambda() 
+{
+    NS_LOG_FUNCTION(this);
+
+    return m_lambda;
 }
 
 } // Namespace ns3

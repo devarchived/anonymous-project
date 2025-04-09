@@ -1738,8 +1738,6 @@ HtFrameExchangeManager::RequestBlockAckPerLink(Ptr<const WifiMpdu> mpdu,
             GetBaManager(tid)->PseudoGotMpduPerLink(mpdu,destLinkAddress);
             return;
         }
-        // We let the QosFrameExchangeManager handle QoS data frame not belonging
-        // to a Block Ack agreement
     }
     return;
 }

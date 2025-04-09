@@ -1,11 +1,17 @@
 /*
- * Copyright (c) 2022
+ * Copyright (c) 2012 Centre Tecnologic de Telecomunicacions de Catalunya (CTTC)
+ * Copyright (c) 2019, University of Padova, Dep. of Information Engineering, SIGNET lab
  *
  * SPDX-License-Identifier: GPL-2.0-only
  *
- * Author: Sebastien Deronne <sebastien.deronne@gmail.com>
+ * Author: Nicola Baldo <nbaldo@cttc.es> for the code adapted from the lena-dual-stripe.cc example
+ * Author: Michele Polese <michele.polese@gmail.com> for this version
  */
 
+#include "ns3/buildings-module.h"
+#include "ns3/core-module.h"
+#include "ns3/mobility-module.h"
+#include "ns3/network-module.h"
 #include "ns3/boolean.h"
 #include "ns3/command-line.h"
 #include "ns3/config.h"
@@ -34,27 +40,34 @@
 #include <functional>
 #include <numeric>
 
-// This is a simple example in order to show how to configure an IEEE 802.11be Wi-Fi network.
-//
-// It outputs the UDP or TCP goodput for every EHT MCS value, which depends on the MCS value (0 to
-// 13), the channel width (20, 40, 80 or 160 MHz) and the guard interval (800ns, 1600ns or 3200ns).
-// The PHY bitrate is constant over all the simulation run. The user can also specify the distance
-// between the access point and the station: the larger the distance the smaller the goodput.
-//
-// The simulation assumes a configurable number of stations in an infrastructure network:
-//
-//  STA     AP
-//    *     *
-//    |     |
-//   n1     n2
-//
-// Packets in this simulation belong to BestEffort Access Class (AC_BE).
-// By selecting an acknowledgment sequence for DL MU PPDUs, it is possible to aggregate a
-// Round Robin scheduler to the AP, so that DL MU PPDUs are sent by the AP via DL OFDMA.
-
 using namespace ns3;
 
-// NS_LOG_COMPONENT_DEFINE("ehr-dualband-network");
+NS_LOG_COMPONENT_DEFINE("RandomWalk2dIndoor");
+
+/**
+ * Print the buildings list in a format that can be used by Gnuplot to draw them.
+ *
+ * \param filename The output filename.
+ */
+void
+PrintGnuplottableBuildingListToFile(std::string filename)
+{
+    std::ofstream outFile;
+    outFile.open(filename.c_str(), std::ios_base::out | std::ios_base::trunc);
+    if (!outFile.is_open())
+    {
+        NS_LOG_ERROR("Can't open file " << filename);
+        return;
+    }
+    uint32_t index = 0;
+    for (auto it = BuildingList::Begin(); it != BuildingList::End(); ++it)
+    {
+        ++index;
+        Box box = (*it)->GetBoundaries();
+        outFile << "set object " << index << " rect from " << box.xMin << "," << box.yMin << " to "
+                << box.xMax << "," << box.yMax << std::endl;
+    }
+}
 
 static void
 TimePasses ()
@@ -144,139 +157,20 @@ bool findSubstring(const std::string& text, const std::string& substring)
     return text.find(substring) != std::string::npos;
 }
 
-/// True for verbose output.
-static bool g_verbose = true;
-
-/**
- * MAC-level TX trace.
- *
- * \param context The context.
- * \param p The packet.
- */
-void
-DevTxTrace(std::string context, Ptr<const Packet> p)
-{
-    uint64_t packetUid = p->GetUid();
-    if (g_verbose)
-    {
-        std::cout << Simulator::Now().As(Time::US) << " MAC TX p: " << packetUid << std::endl;
-    }
-}
-
-/**
- * MAC-level RX trace.
- *
- * \param context The context.
- * \param p The packet.
- */
-void
-DevRxTrace(std::string context, Ptr<const Packet> p)
-{
-    uint64_t packetUid = p->GetUid();
-    if (g_verbose)
-    {
-        std::cout << Simulator::Now().As(Time::US) << " MAC RX p: " << packetUid << std::endl;
-    }
-}
-
-/**
- * MAC-level TX trace.
- *
- * \param context The context.
- * \param p The packet.
- */
-void
-DevTxDropTrace(std::string context, Ptr<const Packet> p)
-{
-    uint64_t packetUid = p->GetUid();
-    if (g_verbose)
-    {
-        std::cout << Simulator::Now().As(Time::US) << " MAC TX drop p: " << packetUid << std::endl;
-    }
-}
-
-/**
- * MAC-level RX trace.
- *
- * \param context The context.
- * \param p The packet.
- */
-void
-DevRxDropTrace(std::string context, Ptr<const Packet> p)
-{
-    uint64_t packetUid = p->GetUid();
-    if (g_verbose)
-    {
-        std::cout << Simulator::Now().As(Time::US) << " MAC RX drop p: " << packetUid << std::endl;
-    }
-}
-
-// /**
-//  * MAC-level TX trace.
-//  *
-//  * \param context The context.
-//  * \param p The packet.
-//  */
-// void
-// DevAckedMpduTrace(std::string context, Ptr<const WifiMpdu> mpdu)
-// {
-//     uint64_t mpduUid = mpdu->GetPacket()->GetUid();
-//     if (g_verbose)
-//     {
-//         std::cout << Simulator::Now().As(Time::US) << " MAC ACK Packet : " << mpduUid << std::endl;
-//     }
-// }
-
-// /**
-//  * MAC-level RX trace.
-//  *
-//  * \param context The context.
-//  * \param p The packet.
-//  */
-// void
-// DevDroppedMpduTrace(std::string context, Ptr<const WifiMpdu> mpdu)
-// {
-//     uint64_t mpduUid = mpdu->GetPacket()->GetUid();
-//     if (g_verbose)
-//     {
-//         std::cout << Simulator::Now().As(Time::US) << " MAC Dropped Packet : " << mpduUid << std::endl;
-//     }
-// }
-
-/**
- * APP-level TX trace.
- *
- * \param context The context.
- * \param p The packet.
- */
-void
-AppTxTrace(std::string context, Ptr<const Packet> p)
-{
-    uint64_t packetUid = p->GetUid();
-    if (g_verbose)
-    {
-        std::cout << Simulator::Now().As(Time::US) << " APP TX p: " << packetUid << std::endl;
-    }
-}
-
-/**
- * APP-level RX trace.
- *
- * \param context The context.
- * \param p The packet.
- */
-void
-AppRxTrace(std::string context, Ptr<const Packet> p)
-{
-    if (g_verbose)
-    {
-        std::cout << " APP RX p: " << *p << std::endl;
-    }
-}
-
 int
 main(int argc, char* argv[])
 {
+    // General parameters
+    std::string outputDir = "./scratch/wifi-ehr-random-walk/";
+    Time simulationTime{"30s"};
+    std::size_t nStations{1};
+
+    // Building parameters
+    double officeSizeX = 40; // m
+    double officeSizeY = 20;  // m
+    double officeHeight = 3; // m
+
+    // Wifi Simulation Parameters
     bool udp{true};
     bool downlink{true};
     bool useRts{false};
@@ -289,29 +183,14 @@ main(int argc, char* argv[])
     bool switchAuxPhy{true};
     uint16_t auxPhyChWidth{20};
     bool auxPhyTxCapable{true};
-    Time simulationTime{"1s"};
-    meter_u distance{2.0};
-    double frequencySta{5};  // whether the first link operates in the 2.4, 5 or 6 GHz
-    double frequencySta_2{6}; // whether the second link operates in the 2.4, 5 or 6 GHz (0 means no
-                          // second link exists)
-    double frequencySta_3{0}; // whether the third link operates in the 2.4, 5 or 6 GHz (0 means no third link exists)
-    double frequencyApA{5};
-    double frequencyApA_2{0};
-    double frequencyApA_3{0};
-    double frequencyApB{6};
-    double frequencyApB_2{0};
-    double frequencyApB_3{0};
+    std::vector<double> frequencySta = {5,6};
+    std::vector<double> frequencyAp = {5,6};
     dBm_u powSta{10.0};
-    dBm_u powAp1{21.0};
-    dBm_u powAp2{21.0};
-    dBm_u ccaEdTrSta{-62};
-    dBm_u ccaEdTrAp1{-62};
-    dBm_u ccaEdTrAp2{-62};
+    dBm_u powAp{21.0};
+    dBm_u ccaEdTr{-62};
     dBm_u minimumRssi{-82};
     int channelWidth = 20;
     int gi = 3200;
-    std::size_t nStations{1};
-    std::size_t nAPs{2};
     std::string dlAckSeqType{"MU-BAR"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
     bool enableUlOfdma{false};
     bool enableBsrp{false};
@@ -319,27 +198,16 @@ main(int argc, char* argv[])
     uint32_t payloadSize =
         700; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
     Time tputInterval{0}; // interval for detailed throughput measurement
+    double poissonLambda = 1000;
     double minExpectedThroughput{0};
     double maxExpectedThroughput{0};
     Time accessReqInterval{0};
     bool enableMultiApCoordination = true;
     bool reliabilityMode = false;
+    bool enablePoisson = true;
 
     CommandLine cmd(__FILE__);
-    cmd.AddValue(
-        "frequency",
-        "Whether the first link operates in the 2.4, 5 or 6 GHz band (other values gets rejected)",
-        frequencySta);
-    cmd.AddValue(
-        "frequency2",
-        "Whether the second link operates in the 2.4, 5 or 6 GHz band (0 means the device has one "
-        "link, otherwise the band must be different than first link and third link)",
-        frequencySta_2);
-    cmd.AddValue(
-        "frequency3",
-        "Whether the third link operates in the 2.4, 5 or 6 GHz band (0 means the device has up to "
-        "two links, otherwise the band must be different than first link and second link)",
-        frequencySta_3);
+    cmd.AddValue("simulationTime", "Simulation time", simulationTime);
     cmd.AddValue("emlsrLinks",
                  "The comma separated list of IDs of EMLSR links (for MLDs only)",
                  emlsrLinks);
@@ -362,9 +230,6 @@ main(int argc, char* argv[])
     cmd.AddValue("channelSwitchDelay",
                  "The PHY channel switch delay in microseconds",
                  channelSwitchDelayUsec);
-    cmd.AddValue("distance",
-                 "Distance in meters between the station and the access point",
-                 distance);
     cmd.AddValue("simulationTime", "Simulation time", simulationTime);
     cmd.AddValue("udp", "UDP if set to 1, TCP otherwise", udp);
     cmd.AddValue("downlink",
@@ -405,8 +270,8 @@ main(int argc, char* argv[])
                  "Enable WiFi-8 reliability mode",
                  reliabilityMode);
     cmd.Parse(argc, argv);
-
-    // LogComponentEnable("ehr-wifi-network-dualband", LOG_LEVEL_FUNCTION);
+    
+    LogComponentEnable("RandomWalk2dIndoor", LOG_LEVEL_FUNCTION);
 
     if (useRts)
     {
@@ -436,8 +301,15 @@ main(int argc, char* argv[])
     }
 
     double prevThroughput[12] = {0};
-    uint16_t maxChannelWidth = (frequencySta != 2.4 && frequencySta_2 != 2.4 && frequencySta_3 != 2.4) ? 160 : 40;
-    int minGi = enableUlOfdma ? 1600 : 800;
+    bool has24GHz = false;
+    for (double freq : frequencySta) 
+    {
+        if (freq == 2.4) {
+            has24GHz = true;
+            break;
+        }
+    }
+    uint16_t maxChannelWidth = (!has24GHz) ? 160 : 40;
     const auto is80Plus80 = (use80Plus80 && (channelWidth == 160));
     const std::string widthStr = is80Plus80 ? "80+80" : std::to_string(channelWidth);
     const auto segmentWidthStr = is80Plus80 ? "80" : widthStr;
@@ -447,32 +319,49 @@ main(int argc, char* argv[])
         Config::SetDefault("ns3::TcpSocket::SegmentSize", UintegerValue(payloadSize));
     }
 
+    // Install office paraneters
+    std::vector<Ptr<Building>> buildingVector;
+    Ptr<Building> office;
+    office = CreateObject<Building>();
+    office->SetBoundaries(Box(0.0,
+                            officeSizeX,
+                            0.0,
+                            officeSizeY,
+                            0.0,
+                            officeHeight));
+    office->SetNRoomsX(1);
+    office->SetNRoomsY(1);
+    office->SetNFloors(1);
+    buildingVector.push_back(office);
+
+    // print the list of buildings to file
+    std::string outputDirBuilding = outputDir + "buildings.txt";
+    PrintGnuplottableBuildingListToFile(outputDirBuilding);
+
+    // Create Wifi nodes
     NodeContainer wifiStaNodes;
     wifiStaNodes.Create(nStations);
     NodeContainer wifiApNodes;
-    wifiApNodes.Create(nAPs);
+    wifiApNodes.Create(2);
 
     NetDeviceContainer apDevices;
     NetDeviceContainer staDevices;
 
     WifiMacHelper mac;
     WifiHelper wifiSta;
-    WifiHelper wifiApA;
-    WifiHelper wifiApB;
-
-    // Sets the Wi-Fi standard to 802.11be
-    wifiSta.SetStandard(WIFI_STANDARD_80211be);
-    wifiApA.SetStandard(WIFI_STANDARD_80211be);
-    wifiApB.SetStandard(WIFI_STANDARD_80211be);
+    std::vector<WifiHelper> wifiAps(wifiApNodes.GetN());
     std::array<std::string, 3> channelStrSta;
-    std::array<std::string, 3> channelStrApA;
-    std::array<std::string, 3> channelStrApB;
+    std::vector<std::array<std::string, 3>> channelStrAps(wifiApNodes.GetN());
     std::array<FrequencyRange, 3> freqRangesSta;
-    std::array<FrequencyRange, 3> freqRangesApA;
-    std::array<FrequencyRange, 3> freqRangesApB;
+    std::vector<std::array<FrequencyRange, 3>> freqRangesAps(wifiApNodes.GetN());
     uint8_t nLinksSta = 0;
-    uint8_t nLinksApA = 0;
-    uint8_t nLinksApB = 0;
+    std::vector<uint8_t> nLinksAps(wifiApNodes.GetN());
+
+    wifiSta.SetStandard(WIFI_STANDARD_80211be);
+    for (uint8_t i = 0; i < wifiAps.size(); i++)
+    {
+        wifiAps[i].SetStandard(WIFI_STANDARD_80211be);
+    }
 
     std::string ctrlRateStr;
     std::string dataModeStr;
@@ -480,31 +369,10 @@ main(int argc, char* argv[])
     if (mcs >= 0)
     {
         dataModeStr = "EhtMcs" + std::to_string(mcs);
-        nonHtRefRateMbps = EhtPhy::GetNonHtReferenceRate(mcs) / 1e6;   
-    }
-    
-    // Check if there are duplicate frequencies used
-    if (frequencySta_2 == frequencySta || frequencySta_3 == frequencySta ||
-        (frequencySta_3 != 0 && frequencySta_3 == frequencySta_2))
-    {
-        NS_FATAL_ERROR("Frequency values must be unique!");
+        nonHtRefRateMbps = EhtPhy::GetNonHtReferenceRate(mcs) / 1e6;  
     }
 
-    // Check if there are duplicate frequencies used
-    if (frequencyApA_2 == frequencyApA || frequencyApA_3 == frequencyApA ||
-        (frequencyApA_3 != 0 && frequencyApA_3 == frequencyApA_2))
-    {
-        NS_FATAL_ERROR("Frequency values must be unique!");
-    }
-
-    // Check if there are duplicate frequencies used
-    if (frequencyApB_2 == frequencyApB || frequencyApB_3 == frequencyApB ||
-        (frequencyApB_3 != 0 && frequencyApB_3 == frequencyApB_2))
-    {
-        NS_FATAL_ERROR("Frequency values must be unique!");
-    }
-
-    for (auto freq : {frequencySta, frequencySta_2, frequencySta_3})
+    for (auto freq : frequencySta)
     {
         if (nLinksSta > 0 && freq == 0)
         {
@@ -590,22 +458,23 @@ main(int argc, char* argv[])
         nLinksSta++;
     }
 
-    for (auto freq : {frequencyApA, frequencyApA_2, frequencyApA_3})
+    uint16_t it = 0;
+    for (auto freq : frequencyAp)
     {
-        if (nLinksApA > 0 && freq == 0)
+        if (nLinksAps[it] > 0 && freq == 0)
         {
             break;
         }
         if (freq == 6)
         {
-            channelStrApA[nLinksApA] = "{1, " + segmentWidthStr + ", ";
-            channelStrApA[nLinksApA] += "BAND_6GHZ, 0}";
-            freqRangesApA[nLinksApA] = WIFI_SPECTRUM_6_GHZ;
+            channelStrAps[it][nLinksAps[it]] = "{1, " + segmentWidthStr + ", ";
+            channelStrAps[it][nLinksAps[it]] += "BAND_6GHZ, 0}";
+            freqRangesAps[it][nLinksAps[it]] = WIFI_SPECTRUM_6_GHZ;
             Config::SetDefault("ns3::LogDistancePropagationLossModel::ReferenceLoss",
                                 DoubleValue(48));
             if (mcs >= 0)
             {
-                wifiApA.SetRemoteStationManager(nLinksApA,
+                wifiAps[it].SetRemoteStationManager(nLinksAps[it],
                                             "ns3::ConstantRateWifiManager",
                                             "DataMode",
                                             StringValue(dataModeStr),
@@ -614,19 +483,19 @@ main(int argc, char* argv[])
             }
             else 
             {
-                wifiApA.SetRemoteStationManager(nLinksApA,
+                wifiAps[it].SetRemoteStationManager(nLinksAps[it],
                                             "ns3::MinstrelHtWifiManager");
             }
         }
         else if (freq == 5)
         {
-            channelStrApA[nLinksApA] = "{36, " + segmentWidthStr + ", ";
-            channelStrApA[nLinksApA] += "BAND_5GHZ, 0}";
-            freqRangesApA[nLinksApA] = WIFI_SPECTRUM_5_GHZ;
+            channelStrAps[it][nLinksAps[it]] = "{36, " + segmentWidthStr + ", ";
+            channelStrAps[it][nLinksAps[it]] += "BAND_5GHZ, 0}";
+            freqRangesAps[it][nLinksAps[it]] = WIFI_SPECTRUM_5_GHZ;
             if (mcs >= 0)
             {
                 ctrlRateStr = "OfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
-                wifiApA.SetRemoteStationManager(nLinksApA,
+                wifiAps[it].SetRemoteStationManager(nLinksAps[it],
                                             "ns3::ConstantRateWifiManager",
                                             "DataMode",
                                             StringValue(dataModeStr),
@@ -635,22 +504,22 @@ main(int argc, char* argv[])
             }
             else 
             {
-                wifiApA.SetRemoteStationManager(nLinksApA,
+                wifiAps[it].SetRemoteStationManager(nLinksAps[it],
                                             "ns3::MinstrelHtWifiManager");
             }
         }
         else if (freq == 2.4)
         {
-            channelStrApA[nLinksApA] = "{1, " + segmentWidthStr + ", ";
-            channelStrApA[nLinksApA] += "BAND_2_4GHZ, 0}";
-            freqRangesApA[nLinksApA] = WIFI_SPECTRUM_2_4_GHZ;
+            channelStrAps[it][nLinksAps[it]] = "{1, " + segmentWidthStr + ", ";
+            channelStrAps[it][nLinksAps[it]] += "BAND_2_4GHZ, 0}";
+            freqRangesAps[it][nLinksAps[it]] = WIFI_SPECTRUM_2_4_GHZ;
             Config::SetDefault("ns3::LogDistancePropagationLossModel::ReferenceLoss",
                                 DoubleValue(40));
             ctrlRateStr = "ErpOfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
             if (mcs >= 0)
             {
                 ctrlRateStr = "OfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
-                wifiApA.SetRemoteStationManager(nLinksApA,
+                wifiAps[it].SetRemoteStationManager(nLinksAps[it],
                                             "ns3::ConstantRateWifiManager",
                                             "DataMode",
                                             StringValue(dataModeStr),
@@ -659,7 +528,7 @@ main(int argc, char* argv[])
             }
             else 
             {
-                wifiApA.SetRemoteStationManager(nLinksApA,
+                wifiAps[it].SetRemoteStationManager(nLinksAps[it],
                                             "ns3::MinstrelHtWifiManager");
             }
         }
@@ -670,98 +539,13 @@ main(int argc, char* argv[])
 
         if (is80Plus80)
         {
-            channelStrApA[nLinksApA] += std::string(";") + channelStrApA[nLinksApA];
+            channelStrAps[it][nLinksAps[it]] += std::string(";") + channelStrAps[it][nLinksAps[it]];
         }
 
-        nLinksApA++;
+        nLinksAps[it]++;
+        it++;
     }
 
-    for (auto freq : {frequencyApB, frequencyApB_2, frequencyApB_3})
-    {
-        if (nLinksApB > 0 && freq == 0)
-        {
-            break;
-        }
-        if (freq == 6)
-        {
-            channelStrApB[nLinksApB] = "{1, " + segmentWidthStr + ", ";
-            channelStrApB[nLinksApB] += "BAND_6GHZ, 0}";
-            freqRangesApB[nLinksApB] = WIFI_SPECTRUM_6_GHZ;
-            Config::SetDefault("ns3::LogDistancePropagationLossModel::ReferenceLoss",
-                                DoubleValue(48));
-            if (mcs >= 0)
-            {
-                wifiApB.SetRemoteStationManager(nLinksApB,
-                                            "ns3::ConstantRateWifiManager",
-                                            "DataMode",
-                                            StringValue(dataModeStr),
-                                            "ControlMode",
-                                            StringValue(dataModeStr));
-            }
-            else 
-            {
-                wifiApB.SetRemoteStationManager(nLinksApB,
-                                            "ns3::MinstrelHtWifiManager");
-            }
-        }
-        else if (freq == 5)
-        {
-            channelStrApB[nLinksApB] = "{36, " + segmentWidthStr + ", ";
-            channelStrApB[nLinksApB] += "BAND_5GHZ, 0}";
-            freqRangesApB[nLinksApB] = WIFI_SPECTRUM_5_GHZ;
-            if (mcs >= 0)
-            {
-                ctrlRateStr = "OfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
-                wifiApB.SetRemoteStationManager(nLinksApB,
-                                            "ns3::ConstantRateWifiManager",
-                                            "DataMode",
-                                            StringValue(dataModeStr),
-                                            "ControlMode",
-                                            StringValue(dataModeStr));
-            }
-            else 
-            {
-                wifiApB.SetRemoteStationManager(nLinksApB,
-                                            "ns3::MinstrelHtWifiManager");
-            }
-        }
-        else if (freq == 2.4)
-        {
-            channelStrApB[nLinksApB] = "{1, " + segmentWidthStr + ", ";
-            channelStrApB[nLinksApB] += "BAND_2_4GHZ, 0}";
-            freqRangesApB[nLinksApB] = WIFI_SPECTRUM_2_4_GHZ;
-            Config::SetDefault("ns3::LogDistancePropagationLossModel::ReferenceLoss",
-                                DoubleValue(40));
-            ctrlRateStr = "ErpOfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
-            if (mcs >= 0)
-            {
-                ctrlRateStr = "OfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
-                wifiApB.SetRemoteStationManager(nLinksApB,
-                                            "ns3::ConstantRateWifiManager",
-                                            "DataMode",
-                                            StringValue(dataModeStr),
-                                            "ControlMode",
-                                            StringValue(dataModeStr));
-            }
-            else 
-            {
-                wifiApB.SetRemoteStationManager(nLinksApB,
-                                            "ns3::MinstrelHtWifiManager");
-            }
-        }
-        else
-        {
-            NS_FATAL_ERROR("Wrong frequency value!");
-        }
-
-        if (is80Plus80)
-        {
-            channelStrApB[nLinksApB] += std::string(";") + channelStrApB[nLinksApB];
-        }
-
-        nLinksApB++;
-    }
-        
     // Check if multi-link is used!!
     if (nLinksSta > 1 && !emlsrLinks.empty())
     {
@@ -771,8 +555,10 @@ main(int argc, char* argv[])
     if (nLinksSta > 1 && enableMultiApCoordination)
     {
         wifiSta.ConfigEhtOptions("EnableMultiApCoordination", BooleanValue(true));
-        wifiApA.ConfigEhtOptions("EnableMultiApCoordination", BooleanValue(true));
-        wifiApB.ConfigEhtOptions("EnableMultiApCoordination", BooleanValue(true));
+        for (uint8_t i = 0; i < wifiAps.size(); i++)
+        {
+            wifiAps[i].ConfigEhtOptions("EnableMultiApCoordination", BooleanValue(true));
+        }
     }
 
     if(reliabilityMode)
@@ -780,24 +566,20 @@ main(int argc, char* argv[])
         wifiSta.ConfigEhtOptions("ReliabilityMode", BooleanValue(true));
     }
 
-    std::cout << "nLinksSta : " << (int)nLinksSta << std::endl;
-    std::cout << "nLinksApA : " << (int)nLinksApA << std::endl;
-    std::cout << "nLinksApB : " << (int)nLinksApB << std::endl;
-    
     // Setup the EMLSR manager!!!
     mac.SetEmlsrManager("ns3::DefaultEmlsrManager",
-                        "EmlsrLinkSet",
-                        StringValue(emlsrLinks),
-                        "EmlsrPaddingDelay",
-                        TimeValue(MicroSeconds(paddingDelayUsec)),
-                        "EmlsrTransitionDelay",
-                        TimeValue(MicroSeconds(transitionDelayUsec)),
-                        "SwitchAuxPhy",
-                        BooleanValue(switchAuxPhy),
-                        "AuxPhyTxCapable",
-                        BooleanValue(auxPhyTxCapable),
-                        "AuxPhyChannelWidth",
-                        UintegerValue(auxPhyChWidth));
+        "EmlsrLinkSet",
+        StringValue(emlsrLinks),
+        "EmlsrPaddingDelay",
+        TimeValue(MicroSeconds(paddingDelayUsec)),
+        "EmlsrTransitionDelay",
+        TimeValue(MicroSeconds(transitionDelayUsec)),
+        "SwitchAuxPhy",
+        BooleanValue(switchAuxPhy),
+        "AuxPhyTxCapable",
+        BooleanValue(auxPhyTxCapable),
+        "AuxPhyChannelWidth",
+        UintegerValue(auxPhyChWidth));
 
     auto spectrumChannel5 = CreateObject<MultiModelSpectrumChannel>();
     auto spectrumChannel6 = CreateObject<MultiModelSpectrumChannel>();
@@ -806,13 +588,13 @@ main(int argc, char* argv[])
     spectrumChannel5->AddPropagationLossModel(lossModel);
     spectrumChannel6->AddPropagationLossModel(lossModel);
     spectrumChannel2_4->AddPropagationLossModel(lossModel);
-
+    
     Ssid ssid = Ssid("ns3-80211bn");
 
     SpectrumWifiPhyHelper phySta(nLinksSta);
     phySta.SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
     phySta.Set("ChannelSwitchDelay", TimeValue(MicroSeconds(channelSwitchDelayUsec)));
-
+    
     // Sets up multiple link in the physical layer
     for (uint8_t linkId = 0; linkId < nLinksSta; linkId++)
     {
@@ -834,109 +616,66 @@ main(int argc, char* argv[])
     phySta.Set ("TxPowerStart", DoubleValue (powSta));
     phySta.Set ("TxPowerEnd", DoubleValue (powSta));
     phySta.Set ("TxPowerLevels", UintegerValue (1));
-    phySta.Set("CcaEdThreshold", DoubleValue(ccaEdTrSta));
+    phySta.Set("CcaEdThreshold", DoubleValue(ccaEdTr));
     phySta.Set("RxSensitivity", DoubleValue(-92.0));
 
-    mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid));\
-    staDevices.Add(wifiSta.Install(phySta, mac, wifiStaNodes.Get(0)));
+    mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid));
+    staDevices.Add(wifiSta.Install(phySta, mac, wifiStaNodes));
 
-    SpectrumWifiPhyHelper phyApA(nLinksApA);
-    phyApA.SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
-    phyApA.Set("ChannelSwitchDelay", TimeValue(MicroSeconds(channelSwitchDelayUsec)));
-
-    // Sets up multiple link in the physical layer
-    for (uint8_t linkId = 0; linkId < nLinksApA; linkId++)
+    std::vector<SpectrumWifiPhyHelper> phyAps(wifiApNodes.GetN());
+    for (uint16_t i = 0; i < wifiApNodes.GetN(); i++)
     {
-        phyApA.Set(linkId, "ChannelSettings", StringValue(channelStrApA[linkId]));
-        if (findSubstring(channelStrApA[linkId],"5GHZ"))
+        phyAps[i].SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
+        phyAps[i].Set("ChannelSwitchDelay", TimeValue(MicroSeconds(channelSwitchDelayUsec)));
+
+        // Sets up multiple link in the physical layer
+        for (uint8_t linkId = 0; linkId < nLinksAps[i]; linkId++)
         {
-            phyApA.AddChannel(spectrumChannel5, freqRangesApA[linkId]);
+            phyAps[i].Set(linkId, "ChannelSettings", StringValue(channelStrAps[i][linkId]));
+            if (findSubstring(channelStrAps[i][linkId],"5GHZ"))
+            {
+                phyAps[i].AddChannel(spectrumChannel5, freqRangesAps[i][linkId]);
+            }
+            else if (findSubstring(channelStrAps[i][linkId],"6GHZ"))
+            {
+                phyAps[i].AddChannel(spectrumChannel6, freqRangesAps[i][linkId]);
+            }
+            else if (findSubstring(channelStrAps[i][linkId],"2_4GHZ"))
+            {
+                phyAps[i].AddChannel(spectrumChannel2_4, freqRangesAps[i][linkId]);
+            }
         }
-        else if (findSubstring(channelStrApA[linkId],"6GHZ"))
+
+        phyAps[i].Set ("TxPowerStart", DoubleValue (powAp));
+        phyAps[i].Set ("TxPowerEnd", DoubleValue (powAp));
+        phyAps[i].Set ("TxPowerLevels", UintegerValue (1));
+        phyAps[i].Set("CcaEdThreshold", DoubleValue(ccaEdTr));
+        phyAps[i].Set("RxSensitivity", DoubleValue(-92.0));
+
+        mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
+
+        if (dlAckSeqType != "NO-OFDMA")
         {
-            phyApA.AddChannel(spectrumChannel6, freqRangesApA[linkId]);
+            mac.SetMultiUserScheduler("ns3::RrMultiUserScheduler",
+                                        "EnableUlOfdma",
+                                        BooleanValue(enableUlOfdma),
+                                        "EnableBsrp",
+                                        BooleanValue(enableBsrp),
+                                        "AccessReqInterval",
+                                        TimeValue(accessReqInterval));
         }
-        else if (findSubstring(channelStrApA[linkId],"2_4GHZ"))
-        {
-            phyApA.AddChannel(spectrumChannel2_4, freqRangesApA[linkId]);
-        }
+
+        apDevices.Add(wifiAps[i].Install(phyAps[i], mac, wifiApNodes.Get(i)));
     }
 
-    phyApA.Set ("TxPowerStart", DoubleValue (powAp1));
-    phyApA.Set ("TxPowerEnd", DoubleValue (powAp1));
-    phyApA.Set ("TxPowerLevels", UintegerValue (1));
-    phyApA.Set("CcaEdThreshold", DoubleValue(ccaEdTrAp1));
-    phyApA.Set("RxSensitivity", DoubleValue(-92.0));
-
-    mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
-
-    if (dlAckSeqType != "NO-OFDMA")
-    {
-        mac.SetMultiUserScheduler("ns3::RrMultiUserScheduler",
-                                    "EnableUlOfdma",
-                                    BooleanValue(enableUlOfdma),
-                                    "EnableBsrp",
-                                    BooleanValue(enableBsrp),
-                                    "AccessReqInterval",
-                                    TimeValue(accessReqInterval));
-    }
-
-    apDevices.Add(wifiApA.Install(phyApA, mac, wifiApNodes.Get(0)));
-    
-    SpectrumWifiPhyHelper phyApB(nLinksApB);
-
-    phyApB.SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
-    phyApB.Set("ChannelSwitchDelay", TimeValue(MicroSeconds(channelSwitchDelayUsec)));
-
-    // Sets up multiple link in the physical layer
-    for (uint8_t linkId = 0; linkId < nLinksApB; linkId++)
-    {
-        phyApB.Set(linkId, "ChannelSettings", StringValue(channelStrApB[linkId]));
-        if (findSubstring(channelStrApB[linkId],"5GHZ"))
-        {
-            phyApB.AddChannel(spectrumChannel5, freqRangesApB[linkId]);
-        }
-        else if (findSubstring(channelStrApB[linkId],"6GHZ"))
-        {
-            phyApB.AddChannel(spectrumChannel6, freqRangesApB[linkId]);
-        }
-        else if (findSubstring(channelStrApB[linkId],"2_4GHZ"))
-        {
-            phyApB.AddChannel(spectrumChannel2_4, freqRangesApB[linkId]);
-        }
-    }
-
-    if (dlAckSeqType != "NO-OFDMA")
-    {
-        mac.SetMultiUserScheduler("ns3::RrMultiUserScheduler",
-                                    "EnableUlOfdma",
-                                    BooleanValue(enableUlOfdma),
-                                    "EnableBsrp",
-                                    BooleanValue(enableBsrp),
-                                    "AccessReqInterval",
-                                    TimeValue(accessReqInterval));
-    }
-
-    phyApB.Set ("TxPowerStart", DoubleValue (powAp2));
-    phyApB.Set ("TxPowerEnd", DoubleValue (powAp2));
-    phyApB.Set ("TxPowerLevels", UintegerValue (1));
-    phyApB.Set("CcaEdThreshold", DoubleValue(ccaEdTrAp2));
-    phyApB.Set("RxSensitivity", DoubleValue(-92.0));
-
-    mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
-
-    if (dlAckSeqType != "NO-OFDMA")
-    {
-        mac.SetMultiUserScheduler("ns3::RrMultiUserScheduler",
-                                    "EnableUlOfdma",
-                                    BooleanValue(enableUlOfdma),
-                                    "EnableBsrp",
-                                    BooleanValue(enableBsrp),
-                                    "AccessReqInterval",
-                                    TimeValue(accessReqInterval));
-    }
-
-    apDevices.Add(wifiApB.Install(phyApB, mac, wifiApNodes.Get(1)));  
+    //Install AP mobility
+    MobilityHelper apMobility;
+    Ptr<ListPositionAllocator> apPositionAlloc = CreateObject<ListPositionAllocator>();
+    apPositionAlloc->Add(Vector(10.0, 10.0, 1.5));
+    apPositionAlloc->Add(Vector(30.0, 10.0, 1.5));
+    apMobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    apMobility.SetPositionAllocator(apPositionAlloc);
+    apMobility.Install(wifiApNodes);
 
     // Set guard interval and MPDU buffer size
     Config::Set(
@@ -945,18 +684,20 @@ main(int argc, char* argv[])
     Config::Set("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MpduBufferSize",
                 UintegerValue(mpduBufferSize));
 
-    // mobility.
-    MobilityHelper mobility;
-    Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator>();
-
-    positionAlloc->Add(Vector(0.0, 0.0, 0.0));
-    positionAlloc->Add(Vector(10*distance, 0.0, 0.0));
-    positionAlloc->Add(Vector(0.0, 11*distance, 0.0));
-    mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-    mobility.SetPositionAllocator(positionAlloc);
-    mobility.Install(wifiStaNodes);
-    mobility.Install(wifiApNodes);
-
+    //Install STA mobility
+    MobilityHelper staMobility;
+    staMobility.SetMobilityModel(
+            "ns3::RandomWalk2dMobilityModel",
+            "Mode",
+            StringValue("Time"),
+            "Time",
+            StringValue("2s"),
+            "Speed",
+            StringValue("ns3::ConstantRandomVariable[Constant=6.0]"),
+            "Bounds",
+            RectangleValue(Rectangle(0.0, officeSizeX, 0.0, officeSizeY)));
+    staMobility.Install(wifiStaNodes);
+    
     /* Internet stack*/
     InternetStackHelper stack;
     stack.Install(wifiApNodes);
@@ -979,6 +720,8 @@ main(int argc, char* argv[])
     if (mcs >= 0)
     {
         maxLoad = nLinksSta * EhtPhy::GetDataRate(mcs, channelWidth, NanoSeconds(gi), 1) / nStations;
+        std::cout << "Data rate " << EhtPhy::GetDataRate(mcs, channelWidth, NanoSeconds(gi), 1) << std::endl;
+        std::cout << "Total data rate " << maxLoad << std::endl;
     }
     else
     {
@@ -991,6 +734,10 @@ main(int argc, char* argv[])
         {
             clientApp.EnableReliabilityMode();
         }
+        if(enablePoisson)
+        {
+            clientApp.EnablePoissonTraffic();
+        }
 
         // UDP flow
         uint16_t port = 9;
@@ -1002,31 +749,32 @@ main(int argc, char* argv[])
 
         serverApp.Start(Seconds(0.0));
         serverApp.Stop(simulationTime + Seconds(1.0));
-        const auto packetInterval = payloadSize * 8.0 / maxLoad;
+        const auto packetInterval = payloadSize * 8.0 / (maxLoad);
+        if (!poissonLambda)
+        {
+            poissonLambda = 1/packetInterval;
+        }
+        std::cout << "The poissonLambda is " << poissonLambda << std::endl;
 
         for (std::size_t i = 0; i < nStations; i++)
         {
             UdpClientHelper client(staNodeInterfaces.GetAddress(i), port);
             client.SetAttribute("MaxPackets", UintegerValue(4294967295U));
-            client.SetAttribute("Interval", TimeValue(Seconds(packetInterval)));
+            if(enablePoisson)
+            {
+                client.SetAttribute("EnablePoisson", BooleanValue(enablePoisson));
+                client.SetAttribute("PoissonLambda", DoubleValue(poissonLambda));
+            }
+            else
+            {
+                client.SetAttribute("Interval", TimeValue(Seconds(packetInterval)));
+            }
             client.SetAttribute("PacketSize", UintegerValue(payloadSize));
             
-            for (std::size_t i = 0; i < nAPs; i++)
+            for (std::size_t i = 0; i < wifiApNodes.GetN(); i++)
             {   
                 clientApp.Add(client.Install(wifiApNodes.Get(i)));
             }
-
-            // if (reliabilityMode)
-            // {
-            //     clientApp.Add(client.Install(wifiApNodes.Get(0)));
-            // }
-            // else
-            // {
-            //     for (std::size_t i = 0; i < nAPs; i++)
-            //     {   
-            //         clientApp.Add(client.Install(wifiApNodes.Get(i)));
-            //     }
-            // }
             
             clientApp.Start(Seconds(1.0));
             clientApp.Stop(simulationTime + Seconds(1.0));
@@ -1049,7 +797,6 @@ main(int argc, char* argv[])
     }
     Simulator::Schedule (MicroSeconds (100), &TimePasses);
 
-
     // Enable tracing
     // Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpClient/Tx", MakeCallback(&AppTxTrace));
     // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTx", MakeCallback(&DevTxTrace));
@@ -1058,21 +805,24 @@ main(int argc, char* argv[])
     // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRxDrop", MakeCallback(&DevRxDropTrace));
     // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/AckedMpdu", MakeCallback(&DevAckedMpduTrace));
     // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/DroppedMpdu", MakeCallback(&DevDroppedMpduTrace));
-    
+    // Config::Connect("/NodeList/[i]/DeviceList/[i]/$ns3::WifiNetDevice/Mac/Txop/Queue/Dequeue", MakeCallback(&DevTxDequeueTrace));
 
+    // enable the traces for the mobility model
+    AsciiTraceHelper ascii;
+    std::string outputDirMobilityTrace = outputDir + "mobility-trace-example.mob";
+    MobilityHelper::EnableAsciiAll(ascii.CreateFileStream(outputDirMobilityTrace));
+
+    
     Simulator::Stop(simulationTime + Seconds(1.0));
     Simulator::Run();
 
-    // When multiple stations are used, there are chances that association requests
-    // collide and hence the throughput may be lower than expected. Therefore, we relax
-    // the check that the throughput cannot decrease by introducing a scaling factor (or
-    // tolerance)
-    auto tolerance = 0.10;
     cumulRxBytes = GetRxBytes(udp, serverApp, payloadSize);
     auto rxBytes = std::accumulate(cumulRxBytes.cbegin(), cumulRxBytes.cend(), 0.0);
     auto throughput = (rxBytes * 8) / simulationTime.GetMicroSeconds(); // Mbit/s
 
-    std::cout << "RxBytes : " << cumulRxBytes[0] << std::endl;
+    // std::cout << "TxPackets : " << m_txPackets << std::endl;
+    // std::cout << "TxPacketsDequeue : " << m_txDequeue << std::endl;
+    // std::cout << "RxPackets : " << m_rxPackets << std::endl;
 
     std::cout << +mcs << "\t\t\t" << widthStr << " MHz\t\t"
                           << (widthStr.size() > 3 ? "" : "\t") << gi << " ns\t\t\t" << throughput

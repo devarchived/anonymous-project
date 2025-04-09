@@ -501,6 +501,9 @@ ChannelAccessManager::NeedBackoffUponAccess(Ptr<Txop> txop,
             // the backoff start time kept by the EDCAF to the current time in order
             // to correctly align the backoff start time at the next slot boundary
             // (performed by the next call to ChannelAccessManager::RequestAccess())
+            // std::cout << "AIFSN " << (int)m_linkId  << " : " << (int)txop->GetAifsn(m_linkId) << std::endl;
+            // std::cout << "SIFS " << (int)m_linkId  << " : " << GetSifs().GetMicroSeconds() << std::endl;
+            // std::cout << "SLOT " << (int)m_linkId  << " : " << GetSlot().GetMicroSeconds() << std::endl;
             Time delay =
                 (txop->IsQosTxop() ? Seconds(0) : GetSifs() + txop->GetAifsn(m_linkId) * GetSlot());
             txop->UpdateBackoffSlotsNow(0, Simulator::Now() + delay, m_linkId);

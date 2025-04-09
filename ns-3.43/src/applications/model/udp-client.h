@@ -16,6 +16,9 @@
 #include "ns3/ipv4-address.h"
 #include "ns3/ptr.h"
 #include <ns3/traced-callback.h>
+#include <ns3/random-variable-stream.h>
+#include <ns3/double.h>
+#include <ns3/boolean.h>
 
 namespace ns3
 {
@@ -67,6 +70,8 @@ class UdpClient : public Application
     virtual uint32_t GetPacketSize() override;
     virtual uint32_t GetSentCounter() override;
     virtual Time GetInterval() override;
+    virtual void SetInterval(Time newInterval) override;
+    virtual double GetPoissonLambda() override;
 
   private:
     void StartApplication() override;
@@ -95,6 +100,9 @@ class UdpClient : public Application
     uint16_t m_peerPort;   //!< Remote peer port
     uint8_t m_tos;         //!< The packets Type of Service
     EventId m_sendEvent;   //!< Event to send the next packet
+    
+    bool m_isPoisson;
+    double m_lambda;
 
     Ptr<Packet> m_designatedPacket;
 

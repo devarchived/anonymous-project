@@ -144,11 +144,23 @@ ApplicationContainer::DesignatePacketToSend() const
 
     Ptr<Application> firstApp = *Begin();
     auto p = firstApp->GetDesignatedPacket();
+    Time packetInterval;
+    if (m_enablePoisson)
+    {
+        Ptr<ExponentialRandomVariable> x = CreateObject<ExponentialRandomVariable> ();
+        x->SetAttribute ("Mean", DoubleValue(1/firstApp->GetPoissonLambda()));
+        packetInterval = Seconds(x->GetValue());
+        // std::cout << "Test packetInterval " << packetInterval.GetSeconds() << std::endl;
+    }    
 
     for (auto i = Begin(); i != End(); ++i)
     {
         Ptr<Application> app = *i;
         app->SetDesignatedPacket(p);
+        if (m_enablePoisson)
+        {
+        app->SetInterval(packetInterval);
+        }
     }
 
     Simulator::Schedule(firstApp->GetInterval(), std::bind(&ApplicationContainer::DesignatePacketToSend, this));
@@ -159,6 +171,13 @@ ApplicationContainer::EnableReliabilityMode()
 {
     NS_LOG_FUNCTION(this);
     m_enableReliabilityMode = true;
+}
+
+void 
+ApplicationContainer::EnablePoissonTraffic()
+{
+    NS_LOG_FUNCTION(this);
+    m_enablePoisson = true;
 }
 
 } // namespace ns3

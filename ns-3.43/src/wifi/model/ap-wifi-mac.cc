@@ -694,7 +694,6 @@ std::optional<ReducedNeighborReport>
 ApWifiMac::GetReducedNeighborReport(uint8_t linkId) const
 {
     NS_LOG_FUNCTION(this << +linkId);
-    std::cout << "Debug GetReducedNeighborReport() for link " << int(linkId) << std::endl;
     // if (GetNLinks() <= 1)
     // {
     //     return std::nullopt;
@@ -726,7 +725,6 @@ ApWifiMac::GetMultiLinkElement(uint8_t linkId, WifiMacType frameType, const Mac4
 {
     NS_LOG_FUNCTION(this << +linkId << frameType << to);
     // NS_ABORT_IF(GetNLinks() == 1);
-    std::cout << "Debug ApWifiMac::GetMultiLinkElement() " << std::endl;
 
     MultiLinkElement mle(MultiLinkElement::BASIC_VARIANT);
     mle.SetMldMacAddress(GetAddress());
@@ -782,7 +780,7 @@ ApWifiMac::GetMultiLinkElement(uint8_t linkId, WifiMacType frameType, const Mac4
         frameType == WIFI_MAC_MGT_REASSOCIATION_REQUEST ||
         frameType == WIFI_MAC_MGT_ASSOCIATION_RESPONSE)
     {
-        std::cout << "Debug GetMultiLinkElement() MLD Capabilities" << std::endl;
+        NS_LOG_INFO("GetMultiLinkElement() MLD Capabilities");
         auto& mldCapabilities = mle.GetCommonInfoBasic().m_mldCapabilities;
         mldCapabilities.emplace();
         mldCapabilities->maxNSimultaneousLinks = GetNLinks() - 1; // assuming STR for now
@@ -801,7 +799,7 @@ ApWifiMac::GetMultiLinkElement(uint8_t linkId, WifiMacType frameType, const Mac4
          frameType == WIFI_MAC_MGT_REASSOCIATION_RESPONSE) &&
         staMldAddress.has_value())
     {
-        std::cout << "Debug GetMultiLinkElement() MLD Address " << std::endl;
+        NS_LOG_INFO("Debug GetMultiLinkElement() MLD Address");
         for (uint8_t i = 0; i < GetNLinks(); i++)
         {
             auto remoteStationManager = GetWifiRemoteStationManager(i);
@@ -1425,7 +1423,7 @@ void
 ApWifiMac::SendOneBeacon(uint8_t linkId)
 {
     NS_LOG_FUNCTION(this << +linkId);
-    std::cout << "Debug ApWifiMac::SendOneBeacon() for linkId " << (int)linkId << std::endl;
+
     auto& link = GetLink(linkId);
     WifiMacHeader hdr;
     hdr.SetType(WIFI_MAC_MGT_BEACON);
@@ -1496,7 +1494,7 @@ ApWifiMac::SendOneBeacon(uint8_t linkId)
              */
             if (auto rnr = GetReducedNeighborReport(linkId); rnr.has_value())
             {
-                std::cout << "Debug SendOneBeacon() GetReducedNeighborReport() for linkId " << (int)linkId << std::endl;
+                NS_LOG_INFO("GetReducedNeighborReport() for linkId " << +linkId);
                 beacon.Get<ReducedNeighborReport>() = std::move(*rnr);
             }
             /*
@@ -2305,7 +2303,6 @@ ApWifiMac::ParseReportedStaInfo(const AssocReqRefVariant& assoc, Mac48Address fr
 
         if (!mle.has_value())
         {
-            std::cout << "Debug ParseReportedStaInfo()" << std::endl;
             return;
         }
 

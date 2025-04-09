@@ -189,7 +189,7 @@ WifiDefaultAssocManager::EndScanning()
 
         while (apIt != apList.end())
         {
-            std::cout << "Debug m_nbrApInfoId " << (int)apIt->m_nbrApInfoId;
+            NS_LOG_INFO("m_nbrApInfoId " << apIt->m_nbrApInfoId);
             auto apChannel = rnr->get().GetOperatingChannel(apIt->m_nbrApInfoId);
 
             // we cannot setup a link with this affiliated AP if this PHY object is

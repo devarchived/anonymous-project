@@ -54,7 +54,22 @@
 
 using namespace ns3;
 
-// NS_LOG_COMPONENT_DEFINE("ehr-dualband-network");
+NS_LOG_COMPONENT_DEFINE("ehr-triband-network");
+
+
+Time m_sumLatency{"0s"};
+Time m_avgLatency{"0s"};
+uint64_t m_rxPackets{0};
+uint64_t m_txPackets{0};
+uint64_t m_txDequeue{0};
+
+
+typedef struct Analysis
+{
+
+} Analysis;
+
+std::map<Mac48Address,Analysis> analysisMap;
 
 static void
 TimePasses ()
@@ -161,6 +176,7 @@ DevTxTrace(std::string context, Ptr<const Packet> p)
     {
         std::cout << Simulator::Now().As(Time::US) << " MAC TX p: " << packetUid << std::endl;
     }
+    m_txPackets++;
 }
 
 /**
@@ -177,6 +193,18 @@ DevRxTrace(std::string context, Ptr<const Packet> p)
     {
         std::cout << Simulator::Now().As(Time::US) << " MAC RX p: " << packetUid << std::endl;
     }
+    m_rxPackets++;
+}
+
+void
+DevTxDequeueTrace(std::string context, Ptr<const Packet> p)
+{
+    uint64_t packetUid = p->GetUid();
+    if (g_verbose)
+    {
+        std::cout << Simulator::Now().As(Time::US) << " Deqeueued MAC TX p: " << packetUid << std::endl;
+    }
+    m_txDequeue++;
 }
 
 /**
@@ -324,11 +352,13 @@ main(int argc, char* argv[])
     uint32_t payloadSize =
         700; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
     Time tputInterval{0}; // interval for detailed throughput measurement
+    double poissonLambda = 0;
     double minExpectedThroughput{0};
     double maxExpectedThroughput{0};
     Time accessReqInterval{0};
     bool enableMultiApCoordination = true;
     bool reliabilityMode = false;
+    bool enablePoisson = true;
 
     CommandLine cmd(__FILE__);
     cmd.AddValue(
@@ -490,7 +520,8 @@ main(int argc, char* argv[])
     if (mcs >= 0)
     {
         dataModeStr = "EhtMcs" + std::to_string(mcs);
-        nonHtRefRateMbps = EhtPhy::GetNonHtReferenceRate(mcs) / 1e6;   
+        nonHtRefRateMbps = EhtPhy::GetNonHtReferenceRate(mcs) / 1e6;  
+        std::cout << "Control rate :  " << nonHtRefRateMbps << std::endl; 
     }
     
     // Check if there are duplicate frequencies used
@@ -963,7 +994,6 @@ main(int argc, char* argv[])
         }
         else if (findSubstring(channelStrApA[linkId],"2_4GHZ"))
         {
-            std::cout << "Debug 2.4" << std::endl;
             phyApA.AddChannel(spectrumChannel2_4, freqRangesApA[linkId]);
         }
     }
@@ -1141,6 +1171,8 @@ main(int argc, char* argv[])
     if (mcs >= 0)
     {
         maxLoad = nLinksSta * EhtPhy::GetDataRate(mcs, channelWidth, NanoSeconds(gi), 1) / nStations;
+        std::cout << "Data rate " << EhtPhy::GetDataRate(mcs, channelWidth, NanoSeconds(gi), 1) << std::endl;
+        std::cout << "Total data rate " << maxLoad << std::endl;
     }
     else
     {
@@ -1152,6 +1184,10 @@ main(int argc, char* argv[])
         if(reliabilityMode)
         {
             clientApp.EnableReliabilityMode();
+        }
+        if(enablePoisson)
+        {
+            clientApp.EnablePoissonTraffic();
         }
 
         // UDP flow
@@ -1165,12 +1201,25 @@ main(int argc, char* argv[])
         serverApp.Start(Seconds(0.0));
         serverApp.Stop(simulationTime + Seconds(1.0));
         const auto packetInterval = payloadSize * 8.0 / (maxLoad);
+        if (!poissonLambda)
+        {
+            poissonLambda = 1/packetInterval;
+        }
+        std::cout << "The poissonLambda is " << poissonLambda << std::endl;
 
         for (std::size_t i = 0; i < nStations; i++)
         {
             UdpClientHelper client(staNodeInterfaces.GetAddress(i), port);
             client.SetAttribute("MaxPackets", UintegerValue(4294967295U));
-            client.SetAttribute("Interval", TimeValue(Seconds(packetInterval)));
+            if(enablePoisson)
+            {
+                client.SetAttribute("EnablePoisson", BooleanValue(enablePoisson));
+                client.SetAttribute("PoissonLambda", DoubleValue(poissonLambda));
+            }
+            else
+            {
+                client.SetAttribute("Interval", TimeValue(Seconds(packetInterval)));
+            }
             client.SetAttribute("PacketSize", UintegerValue(payloadSize));
             
             for (std::size_t i = 0; i < nAPs; i++)
@@ -1220,7 +1269,7 @@ main(int argc, char* argv[])
     // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRxDrop", MakeCallback(&DevRxDropTrace));
     // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/AckedMpdu", MakeCallback(&DevAckedMpduTrace));
     // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/DroppedMpdu", MakeCallback(&DevDroppedMpduTrace));
-    
+    // Config::Connect("/NodeList/[i]/DeviceList/[i]/$ns3::WifiNetDevice/Mac/Txop/Queue/Dequeue", MakeCallback(&DevTxDequeueTrace));
 
     Simulator::Stop(simulationTime + Seconds(1.0));
     Simulator::Run();
@@ -1234,7 +1283,9 @@ main(int argc, char* argv[])
     auto rxBytes = std::accumulate(cumulRxBytes.cbegin(), cumulRxBytes.cend(), 0.0);
     auto throughput = (rxBytes * 8) / simulationTime.GetMicroSeconds(); // Mbit/s
 
-    std::cout << "RxBytes : " << cumulRxBytes[0] << std::endl;
+    std::cout << "TxPackets : " << m_txPackets << std::endl;
+    std::cout << "TxPacketsDequeue : " << m_txDequeue << std::endl;
+    std::cout << "RxPackets : " << m_rxPackets << std::endl;
 
     std::cout << +mcs << "\t\t\t" << widthStr << " MHz\t\t"
                           << (widthStr.size() > 3 ? "" : "\t") << gi << " ns\t\t\t" << throughput

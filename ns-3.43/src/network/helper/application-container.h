@@ -11,6 +11,8 @@
 
 #include "ns3/application.h"
 #include "ns3/random-variable-stream.h"
+#include <ns3/double.h>
+#include <ns3/boolean.h>
 
 #include <stdint.h>
 #include <vector>
@@ -217,9 +219,12 @@ class ApplicationContainer
 
     void EnableReliabilityMode();
 
+    void EnablePoissonTraffic();
+
   private:
     std::vector<Ptr<Application>> m_applications; //!< Applications smart pointers
     bool m_enableReliabilityMode{false};
+    bool m_enablePoisson{false};
 };
 
 } // namespace ns3

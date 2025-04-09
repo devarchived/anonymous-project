@@ -406,7 +406,6 @@ main(int argc, char* argv[])
         }
         else if (freq == 5)
         {
-            std::cout << "Debug A" << std::endl;
             channelStrApA[nLinksApA] = "{36, " + segmentWidthStr + ", ";
             channelStrApA[nLinksApA] += "BAND_5GHZ, 0}";
             freqRangesApA[nLinksApA] = WIFI_SPECTRUM_5_GHZ;
@@ -493,7 +492,6 @@ main(int argc, char* argv[])
         }
         else if (freq == 5)
         {
-            std::cout << "Debug B" << std::endl;
             channelStrApB[nLinksApB] = "{36, " + segmentWidthStr + ", ";
             channelStrApB[nLinksApB] += "BAND_5GHZ, 0}";
             freqRangesApB[nLinksApB] = WIFI_SPECTRUM_5_GHZ;
@@ -663,17 +661,17 @@ main(int argc, char* argv[])
         // spectrumChannel->AddPropagationLossModel(lossModel);
         if (findSubstring(channelStrApA[linkId],"5GHZ"))
         {
-            std::cout << "Debug 1" << std::endl;
+             1" << std::endl;
             phyApA.AddChannel(spectrumChannel5, freqRangesApA[linkId]);
         }
         else if (findSubstring(channelStrApA[linkId],"6GHZ"))
         {
-            std::cout << "Debug 2" << std::endl;
+             2" << std::endl;
             phyApA.AddChannel(spectrumChannel6, freqRangesApA[linkId]);
         }
         else if (findSubstring(channelStrApA[linkId],"2_4GHZ"))
         {
-            std::cout << "Debug 3" << std::endl;
+             3" << std::endl;
             phyApA.AddChannel(spectrumChannel2_4, freqRangesApA[linkId]);
         }
     }

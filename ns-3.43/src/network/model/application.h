@@ -128,6 +128,8 @@ class Application : public Object
     virtual void SetDesignatedPacket(Ptr<Packet> p);
     virtual Ptr<Packet> GetDesignatedPacket();
     virtual Time GetInterval();
+    virtual void SetInterval(Time newInterval);
+    virtual double GetPoissonLambda();
 
   private:
     /**

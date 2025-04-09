@@ -422,7 +422,8 @@ WifiMac::DoInitialize()
         }
     }
 
-    m_rxQueue = std::make_unique<std::vector<Ptr<const WifiMpdu>>>();
+    m_rxQueue = std::make_unique<std::vector<uint64_t>>();
+    m_ackQueue = std::make_unique<std::vector<uint64_t>>();
 }
 
 void
@@ -454,6 +455,7 @@ WifiMac::DoDispose()
     m_scheduler = nullptr;
 
     m_rxQueue = nullptr;
+    m_ackQueue = nullptr;
 }
 
 WifiMac::LinkEntity::~LinkEntity()
@@ -2505,10 +2507,16 @@ WifiMac::GetMaxAmsduSize(AcIndex ac) const
     return maxSize;
 }
 
-std::vector<Ptr<const WifiMpdu>>& 
+std::vector<uint64_t>& 
 WifiMac::GetRxQueue() 
 {
     return *m_rxQueue;
+}
+
+std::vector<uint64_t>& 
+WifiMac::GetAckQueue() 
+{
+    return *m_ackQueue;
 }
 
 bool 

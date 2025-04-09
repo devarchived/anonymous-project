@@ -449,7 +449,6 @@ MultiLinkElement::SetEmlsrSupported(bool supported)
 {
     NS_LOG_FUNCTION(this);
 
-    // std::cout << "Debug SetEmlsrSupported()" << std::endl;
     auto& emlCapabilities = std::get<BASIC_VARIANT>(m_commonInfo).m_emlCapabilities;
     if (!emlCapabilities.has_value())
     {
@@ -489,7 +488,6 @@ MultiLinkElement::SetTransitionTimeout(Time timeout)
 {
     NS_LOG_FUNCTION(this);
 
-    // std::cout << "Debug SetTransitionTimeout()" << std::endl;
     auto& emlCapabilities = std::get<BASIC_VARIANT>(m_commonInfo).m_emlCapabilities;
     if (!emlCapabilities.has_value())
     {
@@ -514,7 +512,6 @@ MultiLinkElement::SetTransitionTimeout(Time timeout)
         }
         NS_ABORT_MSG_IF(i > 10, "Value not allowed (" << timeout.As(Time::US) << ")");
     }
-    // std::cout << "Debug transitionTimeout : " << timeoutUs << std::endl;
 }
 
 bool
@@ -914,7 +911,7 @@ void
 MultiLinkElement::AddPerStaProfileSubelement()
 {
     NS_LOG_FUNCTION(this);
-    std::cout << "Debug AddPerStaProfileSubelement()" << std::endl;
+
     auto variant = GetVariant();
     NS_ABORT_IF(variant == UNSET);
     m_perStaProfileSubelements.emplace_back(variant);

@@ -779,7 +779,11 @@ class WifiMac : public Object
                          uint8_t tid,
                          uint8_t linkId) const;
 
-    std::vector<Ptr<const WifiMpdu>>&  GetRxQueue();
+    std::vector<uint64_t>&  GetRxQueue();
+
+    std::vector<uint64_t>&  GetAckQueue();
+
+    std::map<std::pair<uint64_t,uint8_t>,EventId>&  GetDuplicateAckMap();
 
     virtual bool ReliabilityModeEnabled() const;
 
@@ -945,7 +949,9 @@ class WifiMac : public Object
     Callback<void> m_linkUp;   //!< Callback when a link is up
     Callback<void> m_linkDown; //!< Callback when a link is down
 
-    std::unique_ptr<std::vector<Ptr<const WifiMpdu>>> m_rxQueue;
+    std::unique_ptr<std::vector<uint64_t>> m_rxQueue;
+
+    std::unique_ptr<std::vector<uint64_t>> m_ackQueue;
 
   private:
     /**

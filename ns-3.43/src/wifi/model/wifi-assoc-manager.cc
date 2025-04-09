@@ -190,11 +190,11 @@ void
 WifiAssocManager::NotifyApInfo(const StaWifiMac::ApInfo&& apInfo)
 {
     NS_LOG_FUNCTION(this << apInfo);
-    std::cout << "Debug NotifyApInfo()" << std::endl;
+
     if (!CanBeInserted(apInfo) || !MatchScanParams(apInfo) ||
         (!m_allowedLinks.empty() && !m_allowedLinks.contains(apInfo.m_linkId)))
     {
-        std::cout << "Debug NotifyApInfo() unallowed links" << std::endl;
+        NS_LOG_INFO("Unallowed links");
         return;
     }
 
@@ -202,17 +202,16 @@ WifiAssocManager::NotifyApInfo(const StaWifiMac::ApInfo&& apInfo)
     // sorted list of ApInfo objects. This is done by trying to insert the BSSID
     // in the hash table (insertion fails if the BSSID is already present)
     auto [hashIt, hashInserted] = m_apListIt.insert({apInfo.m_bssid, {}});
-    std::cout << "Debug NotifyApInfo() m_apListIt size : " << m_apListIt.size() << std::endl;
+    NS_LOG_INFO("m_apListIt size : " << m_apListIt.size());
     if (!hashInserted)
     {
-        std::cout << "Debug NotifyApInfo() erase" << std::endl;
         // an element with the searched BSSID is already present in the hash table.
         // Remove the corresponding ApInfo object from the sorted list.
         m_apList.erase(hashIt->second);
     }
     // insert the ApInfo object
     auto [listIt, listInserted] = m_apList.insert(std::move(apInfo));
-    std::cout << "Debug NotifyApInfo() m_apList size : " << m_apList.size() << std::endl;
+    NS_LOG_INFO("m_apListIt size : " << m_apListIt.size());
     // update the hash table entry
     NS_ASSERT_MSG(listInserted,
                   "An entry (" << listIt->m_apAddr << ", " << listIt->m_bssid << ", "
@@ -225,7 +224,7 @@ void
 WifiAssocManager::ScanningTimeout()
 {
     NS_LOG_FUNCTION(this);
-    std::cout << "Debug WifiAssocManager::ScanningTimeout()" << std::endl;
+
     StaWifiMac::ApInfo bestAp;
     
     if(m_mac->MultiApCoordinationEnabled())
@@ -235,7 +234,7 @@ WifiAssocManager::ScanningTimeout()
             m_mac->ScanningTimeout(std::nullopt);
             return;
         }
-        std::cout << "Debug WifiAssocManager::ScanningTimeout() m_apList size : " << m_apList.size() << std::endl;
+        NS_LOG_INFO("m_apListIt size : " << m_apListIt.size());
         std::list<StaWifiMac::ApInfo> apInfoList;
         for (auto ap = m_apList.begin(); ap != m_apList.end(); ++ap)
         {
@@ -275,7 +274,6 @@ WifiAssocManager::CanSetupMultiLink(OptMleConstRef& mle, OptRnrConstRef& rnr)
     // {
     //     return false;
     // }
-    std::cout << "Debug CanSetupMultiLink()" << std::endl;
 
     if (GetSortedList().empty())
     {
@@ -286,13 +284,13 @@ WifiAssocManager::CanSetupMultiLink(OptMleConstRef& mle, OptRnrConstRef& rnr)
     // from Beacon or Probe Response
     if (auto beacon = std::get_if<MgtBeaconHeader>(&m_apList.begin()->m_frame); beacon)
     {
-        std::cout << "Debug CanSetupMultiLink() Beacon" << std::endl;
+        NS_LOG_INFO("Beacon response");
         mle = beacon->Get<MultiLinkElement>();
         rnr = beacon->Get<ReducedNeighborReport>();
     }
     else
     {
-        std::cout << "Debug CanSetupMultiLink() Probe" << std::endl;
+        NS_LOG_INFO("Probe response");
         auto probeResp = std::get_if<MgtProbeResponseHeader>(&m_apList.begin()->m_frame);
         NS_ASSERT(probeResp);
         mle = probeResp->Get<MultiLinkElement>();
@@ -301,14 +299,14 @@ WifiAssocManager::CanSetupMultiLink(OptMleConstRef& mle, OptRnrConstRef& rnr)
 
     if (!mle.has_value())
     {
-        std::cout << "Debug CanSetupMultiLink() mle.has_value()" << std::endl;
+        NS_LOG_INFO("No Multi-Link Element in Beacon/Probe Response");
         NS_LOG_DEBUG("No Multi-Link Element in Beacon/Probe Response");
         return false;
     }
 
     if (!rnr.has_value() || rnr->get().GetNNbrApInfoFields() == 0)
     {   
-        std::cout << "Debug CanSetupMultiLink() rnr.has_value()" << std::endl;
+        NS_LOG_INFO("No Reduced Neighbor Report Element in Beacon/Probe Response");
         NS_LOG_DEBUG("No Reduced Neighbor Report Element in Beacon/Probe Response");
         return false;
     }
@@ -317,7 +315,7 @@ WifiAssocManager::CanSetupMultiLink(OptMleConstRef& mle, OptRnrConstRef& rnr)
     // Link ID Info subfield
     if (!mle->get().HasLinkIdInfo())
     {
-        std::cout << "Debug CanSetupMultiLink() HasLinkIdInfo()" << std::endl;
+        NS_LOG_INFO("No Link ID Info subfield in the Multi-Link Element");
         NS_LOG_DEBUG("No Link ID Info subfield in the Multi-Link Element");
         return false;
     }
@@ -349,12 +347,10 @@ WifiAssocManager::CanSetupMultiLink(OptMleConstRef& mle, OptRnrConstRef& rnr)
 std::optional<WifiAssocManager::RnrLinkInfo>
 WifiAssocManager::GetNextAffiliatedAp(const ReducedNeighborReport& rnr, std::size_t nbrApInfoId)
 {
-    NS_LOG_FUNCTION(nbrApInfoId);
-    std::cout << "Debug GetNextAffiliatedAp() with NbrApInfoFields : " << (int)rnr.GetNNbrApInfoFields() << std::endl;
-    std::cout << "Debug GetNextAffiliatedAp() with nbrApInfoId : " << (int)nbrApInfoId << std::endl;
+    NS_LOG_INFO("Debug GetNextAffiliatedAp() with NbrApInfoFields : " << rnr.GetNNbrApInfoFields() <<  " and nbrApInfoId : " << nbrApInfoId);
+
     while (nbrApInfoId < rnr.GetNNbrApInfoFields())
     {
-        std::cout << "Debug GetNextAffiliatedAp() while" << std::endl;
         if (!rnr.HasMldParameters(nbrApInfoId))
         {
             // this Neighbor AP Info field is not suitable to setup a link
@@ -390,7 +386,8 @@ WifiAssocManager::GetNextAffiliatedAp(const ReducedNeighborReport& rnr, std::siz
 std::list<WifiAssocManager::RnrLinkInfo>
 WifiAssocManager::GetAllAffiliatedAps(const ReducedNeighborReport& rnr)
 {
-    std::cout << "Debug GetAllAffiliatedAps()" << std::endl;
+    NS_LOG_INFO("Debug GetAllAffiliatedAps()");
+
     std::list<WifiAssocManager::RnrLinkInfo> apList;
     std::size_t nbrApInfoId = 0;
     std::optional<WifiAssocManager::RnrLinkInfo> next;
