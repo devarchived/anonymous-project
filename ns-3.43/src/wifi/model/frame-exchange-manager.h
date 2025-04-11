@@ -154,6 +154,9 @@ class FrameExchangeManager : public Object
      * \param channelAccessManager the channel access manager to use
      */
     virtual void SetChannelAccessManager(const Ptr<ChannelAccessManager> channelAccessManager);
+
+    Ptr<ChannelAccessManager>  GetChannelAccessManager();
+    
     /**
      * Set the PHY layer to use.
      *
@@ -306,6 +309,8 @@ class FrameExchangeManager : public Object
      * into off mode, pending MAC transmissions (RTS, CTS, Data and Ack) are cancelled.
      */
     void NotifyOffNow();
+
+    void SendDuplicateNormalAck(const WifiMacHeader& hdr, Mac48Address destLinkAddress, const WifiTxVector& dataTxVector, double dataSnr);
 
   protected:
     void DoDispose() override;
@@ -625,6 +630,8 @@ class FrameExchangeManager : public Object
      * \param dataSnr the SNR of the frame soliciting the Normal Ack in linear scale
      */
     void SendNormalAck(const WifiMacHeader& hdr, const WifiTxVector& dataTxVector, double dataSnr);
+    
+
 
     /**
      * Get the next fragment of the current MSDU.

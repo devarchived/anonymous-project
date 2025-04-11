@@ -760,6 +760,8 @@ QosFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                                      const WifiTxVector& txVector,
                                      bool inAmpdu)
 {
+    NS_LOG_FUNCTION(this << *mpdu);
+    
     // The received MPDU is either broadcast or addressed to this station
     NS_ASSERT(mpdu->GetHeader().GetAddr1().IsGroup() || mpdu->GetHeader().GetAddr1() == m_self);
 
@@ -797,6 +799,8 @@ QosFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
         if (hdr.GetAddr1() == m_self && hdr.GetQosAckPolicy() == WifiMacHeader::NORMAL_ACK)
         {
             NS_LOG_DEBUG("Received " << hdr.GetTypeString() << " from=" << hdr.GetAddr2()
+                                     << ", schedule ACK");
+            NS_LOG_INFO("Received " << hdr.GetTypeString() << " from=" << hdr.GetAddr2()
                                      << ", schedule ACK");
             Simulator::Schedule(m_phy->GetSifs(),
                                 &QosFrameExchangeManager::SendNormalAck,

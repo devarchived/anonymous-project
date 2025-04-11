@@ -411,12 +411,13 @@ main(int argc, char* argv[])
     Time simulationTime{"1s"};
     uint16_t numBss = 4;
     std::vector<uint16_t> numApsPerBss = {3, 3, 3, 3}; 
-    uint32_t seed = 4;
+    uint32_t seed = 5;
 
     // Wifi Simulation Parameters
     bool udp{true};
     bool downlink{true};
     bool useRts{false};
+    bool frameAggregation{true};
     bool use80Plus80{false};
     uint16_t mpduBufferSize{512};
     std::vector<double> freqBands = {2.4,5,6};
@@ -432,10 +433,10 @@ main(int argc, char* argv[])
     dBm_u minimumRssi{-82};
     int channelWidth = 20;
     int gi = 3200;
-    std::string dlAckSeqType{"MU-BAR"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
+    std::string dlAckSeqType{"ACK-SU-FORMAT"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
     bool enableUlOfdma{false};
     bool enableBsrp{false};
-    int mcs{0}; // -1 indicates an unset value
+    int mcs{13}; // -1 indicates an unset value
     uint32_t payloadSize =
         700; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
     Time tputInterval{0}; // interval for detailed throughput measurement
@@ -451,7 +452,7 @@ main(int argc, char* argv[])
     std::vector<bool> reliabilityMode(numBss);
     for (uint16_t i = 0; i < numBss; i++)
     {
-        reliabilityMode[i] = true;
+        reliabilityMode[i] = false;
     }
     bool enablePoisson = true;
 
@@ -897,8 +898,19 @@ main(int argc, char* argv[])
             phyAps[i].Set("CcaEdThreshold", DoubleValue(ccaEdTr));
             phyAps[i].Set("RxSensitivity", DoubleValue(-92.0));
 
-            mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
-
+            if(!frameAggregation)
+            {
+                mac.SetType("ns3::ApWifiMac",
+                    "Ssid", SsidValue(ssid),
+                    "BE_MaxAmpduSize",UintegerValue(0), // Enable A-MPDU with the highest maximum size allowed by the standard);
+                    "BE_MaxAmsduSize",UintegerValue(0)); // Enable A-MSDU with the highest maximum size (in Bytes) allowed
+            }
+            else 
+            {
+                mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
+            }
+            
+            
             if (dlAckSeqType != "NO-OFDMA")
             {
                 mac.SetMultiUserScheduler("ns3::RrMultiUserScheduler",

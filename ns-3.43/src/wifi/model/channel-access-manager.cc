@@ -1214,4 +1214,10 @@ ChannelAccessManager::UpdateLastIdlePeriod()
     }
 }
 
+Time
+ChannelAccessManager::GetLastRxEnd()
+{
+    return m_lastRx.end;
+}
+
 } // namespace ns3

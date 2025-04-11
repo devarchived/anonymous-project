@@ -894,6 +894,59 @@ FrameExchangeManager::SendNormalAck(const WifiMacHeader& hdr,
     ForwardMpduDown(Create<WifiMpdu>(packet, ack), ackTxVector);
 }
 
+void
+FrameExchangeManager::SendDuplicateNormalAck(const WifiMacHeader& hdr,
+                                    Mac48Address destLinkAddress,
+                                    const WifiTxVector& dataTxVector,
+                                    double dataSnr)
+{
+    NS_LOG_FUNCTION(this << hdr << dataTxVector << dataSnr);
+
+    WifiTxVector ackTxVector =
+        GetWifiRemoteStationManager()->GetAckTxVector(destLinkAddress, dataTxVector);
+    WifiMacHeader ack;
+    ack.SetType(WIFI_MAC_CTL_ACK);
+    ack.SetDsNotFrom();
+    ack.SetDsNotTo();
+    ack.SetNoRetry();
+    ack.SetNoMoreFragments();
+    ack.SetAddr1(destLinkAddress);
+    // 802.11-2016, Section 9.2.5.7: Duration/ID is received duration value
+    // minus the time to transmit the Ack frame and its SIFS interval
+    Time duration = hdr.GetDuration() - m_phy->GetSifs() -
+            m_phy->CalculateTxDuration(GetAckSize(), ackTxVector, m_phy->GetPhyBand());
+    // The TXOP holder may exceed the TXOP limit in some situations (Sec. 10.22.2.8 of 802.11-2016)
+    if (duration.IsStrictlyNegative())
+    {
+        duration = Seconds(0);
+    }
+    ack.SetDuration(duration);
+
+    Ptr<Packet> packet = Create<Packet>();
+
+    SnrTag tag;
+    tag.Set(dataSnr);
+    packet->AddPacketTag(tag);
+
+
+    if(!(m_phy->GetState()->IsStateTx()) && !(m_phy->GetState()->IsStateSwitching()) && !(GetChannelAccessManager()->IsBusy()) && !(Simulator::Now() - GetChannelAccessManager()->GetLastRxEnd() <= m_phy->GetSifs()))
+    {
+        NS_LOG_INFO("Successfully forward normal ACK down");
+        ForwardMpduDown(Create<WifiMpdu>(packet, ack), ackTxVector);   
+    }
+    else 
+    {
+        NS_LOG_INFO("Reschedule ACK transmission");
+        Simulator::Schedule(m_phy->GetSifs(),
+        &FrameExchangeManager::SendDuplicateNormalAck,
+        this,
+        hdr,
+        destLinkAddress,
+        dataTxVector,
+        dataSnr);
+    }
+}
+
 Ptr<WifiMpdu>
 FrameExchangeManager::GetNextFragment()
 {
@@ -1467,6 +1520,12 @@ FrameExchangeManager::EndReceiveAmpdu(Ptr<const WifiPsdu> psdu,
                                       const std::vector<bool>& perMpduStatus)
 {
     NS_ASSERT_MSG(false, "A non-QoS station should not receive an A-MPDU");
+}
+
+Ptr<ChannelAccessManager>  
+FrameExchangeManager::GetChannelAccessManager()
+{
+    return m_channelAccessManager;
 }
 
 } // namespace ns3

@@ -347,6 +347,8 @@ class ChannelAccessManager : public Object
     void NotifySwitchingEmlsrLink(Ptr<WifiPhy> phy,
                                   const WifiPhyOperatingChannel& channel,
                                   uint8_t linkId);
+    
+    Time GetLastRxEnd();
 
   protected:
     void DoInitialize() override;
