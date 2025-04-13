@@ -1251,33 +1251,32 @@ EhtFrameExchangeManager::ReceiveMpdu(Ptr<const WifiMpdu> mpdu,
                 }
             }
         }
-        else if((m_mac->GetNLinks() > 1) && (rxCount < m_mac->GetNLinks() - 1))
-        {
-            NS_LOG_INFO("[link=" << +m_linkId << "] Duplicate packet with Uid " << mpdu->GetPacket()->GetUid() << " not forwarded up");
-            ackQueue.push_back(mpdu->GetPacket()->GetUid());
-            return;
-        }
-        else
-        {
-            NS_LOG_INFO("[link=" << +m_linkId << "] Duplicate packet with Uid " << mpdu->GetPacket()->GetUid() << " not forwarded up");
-            NS_LOG_INFO("All duplicate packets sucesfully received");
-            for (auto it = ackQueue.begin(); it != ackQueue.end();)//; ++it)
-            {
-                if (*it)
-                {
-                    if(mpdu && mpdu->GetPacket()->GetUid() == *it)
-                    {
-                        it = ackQueue.erase(it);
-                    }
-                    else 
-                    {
-                        // loop does not increment after erasing
-                        ++it;
-                    }
-                }
-                else break;
-            }
-        }
+        // else if((m_mac->GetNLinks() > 1) && (rxCount < m_mac->GetNLinks() - 1))
+        // {
+        //     NS_LOG_INFO("[link=" << +m_linkId << "] Duplicate packet with Uid " << mpdu->GetPacket()->GetUid() << " not forwarded up");
+        //     ackQueue.push_back(mpdu->GetPacket()->GetUid());
+        // }
+        // else
+        // {
+        //     NS_LOG_INFO("[link=" << +m_linkId << "] Duplicate packet with Uid " << mpdu->GetPacket()->GetUid() << " not forwarded up");
+        //     NS_LOG_INFO("All duplicate packets sucesfully received");
+        //     for (auto it = ackQueue.begin(); it != ackQueue.end();)//; ++it)
+        //     {
+        //         if (*it)
+        //         {
+        //             if(mpdu && mpdu->GetPacket()->GetUid() == *it)
+        //             {
+        //                 it = ackQueue.erase(it);
+        //             }
+        //             else 
+        //             {
+        //                 // loop does not increment after erasing
+        //                 ++it;
+        //             }
+        //         }
+        //         else break;
+        //     }
+        // }
     }
 
     HeFrameExchangeManager::ReceiveMpdu(mpdu, rxSignalInfo, txVector, inAmpdu);

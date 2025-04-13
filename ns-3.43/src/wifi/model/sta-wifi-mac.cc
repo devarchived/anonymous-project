@@ -2232,10 +2232,12 @@ StaWifiMac::TxOk(Ptr<const WifiMpdu> mpdu)
     // we received an acknowledgment while switching PM mode; the PM mode change is effective now
     if (hdr.IsPowerManagement() && link.pmMode == WIFI_PM_SWITCHING_TO_PS)
     {
+        NS_LOG_INFO("STA " << mpdu->GetHeader().GetAddr2() << " switching to power save mode");
         link.pmMode = WIFI_PM_POWERSAVE;
     }
     else if (!hdr.IsPowerManagement() && link.pmMode == WIFI_PM_SWITCHING_TO_ACTIVE)
     {
+        NS_LOG_INFO("STA " << mpdu->GetHeader().GetAddr2() << " switching to active mode");
         link.pmMode = WIFI_PM_ACTIVE;
     }
 }

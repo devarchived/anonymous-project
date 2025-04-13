@@ -1651,7 +1651,7 @@ ApWifiMac::TxOk(Ptr<const WifiMpdu> mpdu)
                     NS_LOG_DEBUG("AP=" << GetFrameExchangeManager(i)->GetAddress()
                                        << " associated with STA=" << *staAddress);
                     stationManager->RecordGotAssocTxOk(*staAddress);
-                    StaSwitchingToPsMode(*staAddress, i);
+                    // StaSwitchingToPsMode(*staAddress, i);
                 }
             }
 
@@ -1735,11 +1735,13 @@ ApWifiMac::ProcessPowerManagementFlag(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
     if (!staInPsMode && mpdu->GetHeader().IsPowerManagement())
     {
         // the sending STA is switching to Power Save mode
+        NS_LOG_INFO("[" << GetAddress() << "] STA " << staAddr << " switching to power save mode");
         StaSwitchingToPsMode(staAddr, linkId);
     }
     else if (staInPsMode && !mpdu->GetHeader().IsPowerManagement())
     {
         // the sending STA is switching back to Active mode
+        NS_LOG_INFO("[" << GetAddress() << "] STA " << staAddr << " switching back to active mode");
         StaSwitchingToActiveModeOrDeassociated(staAddr, linkId);
     }
 }
@@ -1828,7 +1830,7 @@ ApWifiMac::Receive(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
         {
             // this MPDU is being acknowledged by the AP, so we can process
             // the Power Management flag
-            NS_LOG_INFO("ProcessPowerManagementFlage IsMgt()");
+            NS_LOG_INFO("ProcessPowerManagementFlag IsMgt()");
             ProcessPowerManagementFlag(mpdu, *apLinkId);
 
             Mac48Address to = hdr->GetAddr3();
@@ -1905,7 +1907,7 @@ ApWifiMac::Receive(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
         {
             // this MPDU is being acknowledged by the AP, so we can process
             // the Power Management flag
-            NS_LOG_INFO("ProcessPowerManagementFlage IsMgt()");
+            NS_LOG_INFO("ProcessPowerManagementFlag IsMgt()");
             ProcessPowerManagementFlag(mpdu, linkId);
         }
         if (hdr->IsProbeReq() && (hdr->GetAddr1().IsGroup() ||

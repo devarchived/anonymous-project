@@ -29,6 +29,8 @@
  #include "ns3/wifi-acknowledgment.h"
  #include "ns3/yans-wifi-channel.h"
  #include "ns3/yans-wifi-helper.h"
+ #include "ns3/wifi-mac.h"
+ #include "ns3/frame-exchange-manager.h"
  
  #include <array>
  #include <functional>
@@ -78,12 +80,22 @@
  uint64_t m_dropPackets{0};
  uint64_t m_numCollisions{0};
  
- typedef struct Analysis
- {
+Mac48Address m_staAddress;
+NetDeviceContainer m_staDevices;
+
+typedef struct Analysis
+{
+    std::map<uint64_t,Time> phyTxMap;
+    std::map<uint64_t,Time> macRxMap;
+    uint64_t rxPackets{0};
+    uint64_t phyTxPackets{0};
+    Time sumDelay{"0s"};
+    Time avgDelay{"0s"};
+    Time sumChAccessDelay{"0s"};
+    Time avgChAccessDelay{"0s"};
+} Analysis;
  
- } Analysis;
- 
- std::map<Mac48Address,Analysis> analysisMap;
+std::map<Mac48Address,Analysis> analysisMap;
  
  static void
  TimePasses ()
@@ -186,17 +198,27 @@
      p->PeekHeader(hdr);
      if(hdr.IsQosData() || hdr.IsData())
      {
-        uint64_t packetUid = p->GetUid();
-        if (g_verbose)
+        for (uint16_t i = 0; i < m_staDevices.GetN(); i++)
         {
-            std::cout << Simulator::Now().As(Time::US) << " PHY TX p: " << packetUid << std::endl;
+            Ptr<WifiNetDevice> wifiStaDev = DynamicCast<WifiNetDevice>(m_staDevices.Get(i));
+            for (uint8_t linkId = 0; linkId < wifiStaDev->GetMac()->GetNLinks(); linkId++)
+            {
+                if(hdr.GetAddr1() == wifiStaDev->GetMac()->GetFrameExchangeManager(linkId)->GetAddress())
+                {
+                    uint64_t packetUid = p->GetUid();
+                    if (g_verbose)
+                    {
+                        std::cout << Simulator::Now().As(Time::US) << " PHY TX p: " << packetUid << std::endl;
+                    }
+                    
+                    if (!m_reliabilityMode || m_phyTxMap.find(packetUid) == m_phyTxMap.end()) 
+                    {
+                        m_phyTxMap[packetUid] = Simulator::Now();
+                    }
+                    m_phyTxPackets++;
+                }
+            }
         }
-        
-        if (!m_reliabilityMode || m_phyTxMap.find(packetUid) == m_phyTxMap.end()) 
-        {
-            m_phyTxMap[packetUid] = Simulator::Now();
-        }
-        m_phyTxPackets++;
      }
  }
  
@@ -239,7 +261,7 @@
          uint64_t packetUid = p->GetUid();
          if (g_verbose)
          {
-             std::cout << Simulator::Now().As(Time::US) << " PHY TX p: " << packetUid << std::endl;
+             std::cout << Simulator::Now().As(Time::US) << " PHY RX p: " << packetUid << std::endl;
          }
          m_phyRxMap[packetUid] = Simulator::Now();
          m_phyRxPackets++;
@@ -284,7 +306,7 @@
  {
      WifiMacHeader hdr;
      p->PeekHeader(hdr);
-     if(hdr.IsQosData() || hdr.IsData())
+     if((hdr.IsQosData() || hdr.IsData()))
      {
         uint64_t packetUid = p->GetUid();
         if (g_verbose)
@@ -296,6 +318,39 @@
             m_macRxMap[packetUid] = Simulator::Now();
         }
         m_rxPackets++;
+     }
+ }
+
+ /**
+  * MAC-level RX trace.
+  *
+  * \param context The context.
+  * \param p The packet.
+  */
+ void
+ MacRxWithAddressTrace(std::string context, Mac48Address rxMacAddress,Ptr<const Packet> p)
+ {
+     WifiMacHeader hdr;
+     p->PeekHeader(hdr);
+     if((hdr.IsQosData() || hdr.IsData()))
+     {
+        for (uint16_t i = 0; i < m_staDevices.GetN(); i++)
+        {
+            Ptr<WifiNetDevice> wifiStaDev = DynamicCast<WifiNetDevice>(m_staDevices.Get(i));
+            if (rxMacAddress == wifiStaDev->GetAddress())
+            {
+                uint64_t packetUid = p->GetUid();
+                if (g_verbose)
+                {
+                    std::cout << Simulator::Now().As(Time::US) << " MAC RX p: " << packetUid << std::endl;
+                }
+                if (!m_reliabilityMode || m_macRxMap.find(packetUid) == m_macRxMap.end()) 
+                {
+                    m_macRxMap[packetUid] = Simulator::Now();
+                }
+                m_rxPackets++;
+            }
+        }
      }
  }
  
@@ -528,7 +583,7 @@ void PrintMap(const std::map<uint64_t, Time>& myMap)
      std::string dlAckSeqType{"ACK-SU-FORMAT"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
      bool enableUlOfdma{false};
      bool enableBsrp{false};
-     int mcs{5}; // -1 indicates an unset value
+     int mcs{0}; // -1 indicates an unset value
      uint32_t payloadSize =
          700; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
      Time tputInterval{0}; // interval for detailed throughput measurement
@@ -1474,19 +1529,29 @@ void PrintMap(const std::map<uint64_t, Time>& myMap)
                              simulationTime + Seconds(1.0));
      }
      Simulator::Schedule (MicroSeconds (100), &TimePasses);
- 
- 
+
+     Ptr<WifiNetDevice> wifiStaDev = DynamicCast<WifiNetDevice>(staDevices.Get(0));
+     m_staAddress = wifiStaDev->GetMac()->GetAddress();
+     std::cout << "DEBUG STA MAC Address : " << m_staAddress << std::endl;
+     for (uint8_t linkId = 0; linkId < wifiStaDev->GetMac()->GetNLinks(); linkId++)
+     {
+        std::cout << "DEBUG STA linkId : " << (int)linkId << " MAC Address : " << wifiStaDev->GetMac()->GetFrameExchangeManager(linkId)->GetAddress() << std::endl;
+     }
+
+     m_staDevices = staDevices;
+
      // Enable tracing
     //  Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpClient/Tx", MakeCallback(&AppTxTrace));
      Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTx", MakeCallback(&MacTxTrace));
     //  Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTxDrop", MakeCallback(&DevTxDropTrace));
-     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRx", MakeCallback(&MacRxTrace));
+    //  Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRx", MakeCallback(&MacRxTrace));
+     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRxWithAddress", MakeCallback(&MacRxWithAddressTrace));
      // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRxDrop", MakeCallback(&DevRxDropTrace));
      // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/AckedMpdu", MakeCallback(&DevAckedMpduTrace));
      // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/DroppedMpdu", MakeCallback(&DevDroppedMpduTrace));
      // Config::Connect("/NodeList/[i]/DeviceList/[i]/$ns3::WifiNetDevice/Mac/Txop/Queue/Dequeue", MakeCallback(&DevTxDequeueTrace));
      Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/PhyTxBegin",MakeCallback(&PhyTxTrace));
-     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/PhyRxEnd",MakeCallback(&PhyRxTrace));
+    //  Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/PhyRxEnd",MakeCallback(&PhyRxTrace));
  
     //  Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phy/PhyTxEnd",MakeCallback(&PhyTxEndTrace));
  

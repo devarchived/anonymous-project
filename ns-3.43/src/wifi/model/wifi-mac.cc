@@ -310,6 +310,13 @@ WifiMac::GetTypeId()
                             "non-promiscuous trace.",
                             MakeTraceSourceAccessor(&WifiMac::m_macRxTrace),
                             "ns3::Packet::TracedCallback")
+            .AddTraceSource("MacRxWithAddress",
+                            "A packet has been received by this device, has been passed up from "
+                            "the physical layer "
+                            "and is being forwarded up the local protocol stack. This is a "
+                            "non-promiscuous trace. Now added with the MAC Adress of the MAC layer",
+                            MakeTraceSourceAccessor(&WifiMac::m_macRxAddressTrace),
+                            "ns3::Packet::TracedCallback")
             .AddTraceSource("MacRxDrop",
                             "A packet has been dropped in the MAC layer after it has been passed "
                             "up from the physical layer.",
@@ -717,6 +724,7 @@ void
 WifiMac::NotifyRx(Ptr<const Packet> packet)
 {
     m_macRxTrace(packet);
+    m_macRxAddressTrace(GetAddress(),packet);
 }
 
 void
