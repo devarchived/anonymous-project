@@ -1,0 +1,4 @@
+set object 2 rect from 45,5 to 55,15
+set object 3 rect from 45,35 to 55,45
+set object 4 rect from 17.5,22.5 to 22.5,27.5
+set object 5 rect from 77.5,22.5 to 82.5,27.5

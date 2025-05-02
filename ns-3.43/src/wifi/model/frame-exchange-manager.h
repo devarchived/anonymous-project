@@ -525,6 +525,9 @@ class FrameExchangeManager : public Object
     DroppedMpdu m_droppedMpduCallback;      //!< the dropped MPDU callback
     AckedMpdu m_ackedMpduCallback;          //!< the acknowledged MPDU callback
 
+    TracedCallback<Mac48Address, Ptr<const Packet>> m_droppedMpduTrace;
+    TracedCallback<Mac48Address, Ptr<const Packet>> m_retransmitMpduTrace;
+
     /**
      * Finalize the MAC header of the MPDUs in the given PSDU before transmission. Tasks
      * performed by this method include setting the Power Management flag in the MAC header.

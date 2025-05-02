@@ -1230,6 +1230,9 @@ class WifiMac : public Object
      * \see class CallBackTraceSource
      */
     TracedCallback<Ptr<const Packet>> m_macTxTrace;
+
+    TracedCallback<Mac48Address, Ptr<const Packet>> m_macTxAddressTrace;
+
     /**
      * The trace source fired when packets coming into the "top" of the device
      * are dropped at the MAC layer before being queued for transmission.

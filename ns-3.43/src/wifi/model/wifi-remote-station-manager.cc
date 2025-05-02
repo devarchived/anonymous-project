@@ -1244,6 +1244,8 @@ WifiRemoteStationManager::NeedRetransmission(Ptr<const WifiMpdu> mpdu)
     bool normally = retryCount < maxRetryCount;
     NS_LOG_DEBUG("WifiRemoteStationManager::NeedRetransmission count: "
                  << retryCount << " result: " << std::boolalpha << normally);
+    NS_LOG_INFO("WifiRemoteStationManager::NeedRetransmission count: "
+                << retryCount << " result: " << std::boolalpha << normally);
     return DoNeedRetransmission(Lookup(mpdu->GetHeader().GetAddr1()), mpdu->GetPacket(), normally);
 }
 

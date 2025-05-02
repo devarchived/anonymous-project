@@ -81,13 +81,16 @@
  uint64_t m_numCollisions{0};
  
 Mac48Address m_staAddress;
+std::map<Mac48Address,Mac48Address>  m_apStaAddressMap;
 NetDeviceContainer m_staDevices;
 
 typedef struct Analysis
 {
     std::map<uint64_t,Time> phyTxMap;
+    std::map<uint64_t,Time> macTxMap;
     std::map<uint64_t,Time> macRxMap;
     uint64_t rxPackets{0};
+    uint64_t txPackets{0};
     uint64_t phyTxPackets{0};
     Time sumDelay{"0s"};
     Time avgDelay{"0s"};
@@ -216,6 +219,14 @@ std::map<Mac48Address,Analysis> analysisMap;
                         m_phyTxMap[packetUid] = Simulator::Now();
                     }
                     m_phyTxPackets++;
+
+                    Analysis& staAnalysis = analysisMap[wifiStaDev->GetMac()->GetAddress()];
+
+                    if (!m_reliabilityMode || staAnalysis.phyTxMap.find(packetUid) == staAnalysis.phyTxMap.end()) 
+                    {
+                        staAnalysis.phyTxMap[packetUid] = Simulator::Now();
+                    }
+                    staAnalysis.phyTxPackets++;
                 }
             }
         }
@@ -295,6 +306,44 @@ std::map<Mac48Address,Analysis> analysisMap;
      }
  }
  
+/**
+  * MAC-level TX trace.
+  *
+  * \param context The context.
+  * \param p The packet.
+  */
+void
+MacTxWithAddressTrace(std::string context, Mac48Address txMacAddress, Ptr<const Packet> p)
+{
+    WifiMacHeader hdr;
+    p->PeekHeader(hdr);
+    if((hdr.IsQosData() || hdr.IsData()))
+    {
+        uint64_t packetUid = p->GetUid();
+        if (g_verbose)
+        {
+            std::cout << Simulator::Now().As(Time::US) << " MAC TX p: " << packetUid << std::endl;
+        }
+
+        if (!m_reliabilityMode || m_macTxMap.find(packetUid) == m_macTxMap.end()) 
+        {
+            m_macTxMap[packetUid] = Simulator::Now();
+        }
+        m_txPackets++;
+
+        if(m_apStaAddressMap.find(txMacAddress) != m_apStaAddressMap.end())
+        {
+            Analysis& staAnalysis = analysisMap[m_apStaAddressMap.find(txMacAddress)->second];
+                    
+            if (!m_reliabilityMode || staAnalysis.macTxMap.find(packetUid) == staAnalysis.macTxMap.end()) 
+            {
+                staAnalysis.macTxMap[packetUid] = Simulator::Now();
+            }
+            staAnalysis.txPackets++;
+        }
+    }
+}
+
  /**
   * MAC-level RX trace.
   *
@@ -349,6 +398,14 @@ std::map<Mac48Address,Analysis> analysisMap;
                     m_macRxMap[packetUid] = Simulator::Now();
                 }
                 m_rxPackets++;
+
+                Analysis& staAnalysis = analysisMap[rxMacAddress];
+                    
+                if (!m_reliabilityMode || staAnalysis.macRxMap.find(packetUid) == staAnalysis.macRxMap.end()) 
+                {
+                    staAnalysis.macRxMap[packetUid] = Simulator::Now();
+                }
+                staAnalysis.rxPackets++;
             }
         }
      }
@@ -461,33 +518,33 @@ std::map<Mac48Address,Analysis> analysisMap;
  }
  
  void
- CalculateE2EDelay(const std::map<uint64_t, Time>& inputMap)
+ CalculateE2EDelay(Time& sumDelay, const std::map<uint64_t, Time>& txMap, const std::map<uint64_t, Time>& rxMap)
  {
-     for (const auto& rxPackets : m_macRxMap)
+     for (const auto& rxPackets : rxMap)
      {
          uint64_t packetUid = rxPackets.first;
-         auto txPackets = inputMap.find(packetUid);
+         auto txPackets = txMap.find(packetUid);
  
-         if (txPackets != inputMap.end())
+         if (txPackets != txMap.end())
          {
              Time e2eDelay = rxPackets.second - txPackets->second;
-             m_sumDelay += e2eDelay;
+             sumDelay += e2eDelay;
          }
      }
  }
  
  void
- CalculateChAccessDelay(const std::map<uint64_t, Time>& inputMap)
+ CalculateChAccessDelay(Time& sumChAccessDelay, const std::map<uint64_t, Time>& txMap, const std::map<uint64_t, Time>& rxMap)
  {
-     for (const auto& rxPackets : m_macRxMap)
+     for (const auto& rxPackets : rxMap)
      {
          uint64_t packetUid = rxPackets.first;
-         auto txPackets = inputMap.find(packetUid);
+         auto txPackets = txMap.find(packetUid);
  
-         if (txPackets != inputMap.end())
+         if (txPackets != txMap.end())
          {
              Time chAcessDelay = rxPackets.second - txPackets->second;
-             m_sumChAccessDelay += chAcessDelay;
+             sumChAccessDelay += chAcessDelay;
          }
      }
  }
@@ -509,6 +566,23 @@ ModifyTxMap(const std::map<uint64_t, Time>& inputMap)
     return modifiedMap;
 }
 
+std::map<uint64_t, Time>
+CompareMap(const std::map<uint64_t, Time>& phyMap, const std::map<uint64_t, Time>& macMap)
+{
+    std::map<uint64_t, Time> modifiedMap;
+    for (const auto& it : phyMap)
+    {
+        uint64_t packetUid = it.first;
+        Time txTime = it.second;
+
+        if (macMap.find(packetUid) != macMap.end()) 
+        {
+            modifiedMap[packetUid] = txTime;
+        }
+    }
+    return modifiedMap;
+}
+
 void PrintMap(const std::map<uint64_t, Time>& myMap) 
 {
     for (const auto& entry : myMap) 
@@ -521,165 +595,146 @@ void PrintMap(const std::map<uint64_t, Time>& myMap)
     }
 }
  
- // void
- // CalculateChAccessDelay()
- // {
- //     for (const auto& rxPackets : m_macRxMap)
- //     {
- //         uint64_t packetUid = rxPackets.first;
- //         auto txPackets = m_phyTxMap.find(packetUid);
+int
+main(int argc, char* argv[])
+{
+    bool udp{true};
+    bool downlink{true};
+    bool useRts{false};
+    bool frameAggregation{false};
+    bool use80Plus80{false};
+    uint16_t mpduBufferSize{512};
+    std::string emlsrLinks;//="0,1,2";
+    uint16_t paddingDelayUsec{32};
+    uint16_t transitionDelayUsec{128};
+    uint16_t channelSwitchDelayUsec{100};
+    bool switchAuxPhy{true};
+    uint16_t auxPhyChWidth{20};
+    bool auxPhyTxCapable{true};
+    Time simulationTime{"1s"};
+    meter_u distance{2.0};
+    double frequencySta{5};  // whether the first link operates in the 2.4, 5 or 6 GHz
+    double frequencySta_2{6}; // whether the second link operates in the 2.4, 5 or 6 GHz (0 means no
+                        // second link exists)
+    double frequencySta_3{2.4}; // whether the third link operates in the 2.4, 5 or 6 GHz (0 means no third link exists)
+    double frequencyApA{5};
+    double frequencyApA_2{0};
+    double frequencyApA_3{0};
+    double frequencyApB{6};
+    double frequencyApB_2{0};
+    double frequencyApB_3{0};
+    double frequencyApC{2.4};
+    double frequencyApC_2{0};
+    double frequencyApC_3{0};
+    dBm_u powSta{10.0};
+    dBm_u powAp1{21.0};
+    dBm_u powAp2{21.0};
+    dBm_u powAp3{21.0};
+    dBm_u ccaEdTrSta{-62};
+    dBm_u ccaEdTrAp1{-62};
+    dBm_u ccaEdTrAp2{-62};
+    dBm_u ccaEdTrAp3{-62};
+    dBm_u minimumRssi{-82};
+    int channelWidth = 20;
+    int gi = 3200;
+    std::size_t nStations{1};
+    std::size_t nAPs{3};
+    std::string dlAckSeqType{"ACK-SU-FORMAT"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
+    bool enableUlOfdma{false};
+    bool enableBsrp{false};
+    int mcs{-1}; // -1 indicates an unset value
+    uint32_t payloadSize =
+        700; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
+    Time tputInterval{0}; // interval for detailed throughput measurement
+    double poissonLambda = 1000;
+    double minExpectedThroughput{0};
+    double maxExpectedThroughput{0};
+    Time accessReqInterval{0};
+    bool enableMultiApCoordination = true;
+    bool reliabilityMode = false;
+    bool enablePoisson = true;
  
- //         if (txPackets != m_phyTxMap.end())
- //         {
- //             m_phyTxPackets++;
- //         }
- //     }
- // }
- 
- int
- main(int argc, char* argv[])
- {
-     bool udp{true};
-     bool downlink{true};
-     bool useRts{false};
-     bool frameAggregation{false};
-     bool use80Plus80{false};
-     uint16_t mpduBufferSize{512};
-     std::string emlsrLinks;//="0,1,2";
-     uint16_t paddingDelayUsec{32};
-     uint16_t transitionDelayUsec{128};
-     uint16_t channelSwitchDelayUsec{100};
-     bool switchAuxPhy{true};
-     uint16_t auxPhyChWidth{20};
-     bool auxPhyTxCapable{true};
-     Time simulationTime{"1s"};
-     meter_u distance{2.0};
-     double frequencySta{5};  // whether the first link operates in the 2.4, 5 or 6 GHz
-     double frequencySta_2{6}; // whether the second link operates in the 2.4, 5 or 6 GHz (0 means no
-                           // second link exists)
-     double frequencySta_3{2.4}; // whether the third link operates in the 2.4, 5 or 6 GHz (0 means no third link exists)
-     double frequencyApA{5};
-     double frequencyApA_2{0};
-     double frequencyApA_3{0};
-     double frequencyApB{6};
-     double frequencyApB_2{0};
-     double frequencyApB_3{0};
-     double frequencyApC{2.4};
-     double frequencyApC_2{0};
-     double frequencyApC_3{0};
-     dBm_u powSta{10.0};
-     dBm_u powAp1{21.0};
-     dBm_u powAp2{21.0};
-     dBm_u powAp3{21.0};
-     dBm_u ccaEdTrSta{-62};
-     dBm_u ccaEdTrAp1{-62};
-     dBm_u ccaEdTrAp2{-62};
-     dBm_u ccaEdTrAp3{-62};
-     dBm_u minimumRssi{-82};
-     int channelWidth = 20;
-     int gi = 3200;
-     std::size_t nStations{1};
-     std::size_t nAPs{3};
-     std::string dlAckSeqType{"ACK-SU-FORMAT"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
-     bool enableUlOfdma{false};
-     bool enableBsrp{false};
-     int mcs{0}; // -1 indicates an unset value
-     uint32_t payloadSize =
-         700; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
-     Time tputInterval{0}; // interval for detailed throughput measurement
-     double poissonLambda = 0;
-     double minExpectedThroughput{0};
-     double maxExpectedThroughput{0};
-     Time accessReqInterval{0};
-     bool enableMultiApCoordination = true;
-     bool reliabilityMode = false;
-     bool enablePoisson = true;
- 
-     CommandLine cmd(__FILE__);
-     cmd.AddValue(
-         "frequency",
-         "Whether the first link operates in the 2.4, 5 or 6 GHz band (other values gets rejected)",
-         frequencySta);
-     cmd.AddValue(
-         "frequency2",
-         "Whether the second link operates in the 2.4, 5 or 6 GHz band (0 means the device has one "
-         "link, otherwise the band must be different than first link and third link)",
-         frequencySta_2);
-     cmd.AddValue(
-         "frequency3",
-         "Whether the third link operates in the 2.4, 5 or 6 GHz band (0 means the device has up to "
-         "two links, otherwise the band must be different than first link and second link)",
-         frequencySta_3);
-     cmd.AddValue("emlsrLinks",
-                  "The comma separated list of IDs of EMLSR links (for MLDs only)",
-                  emlsrLinks);
-     cmd.AddValue("emlsrPaddingDelay",
-                  "The EMLSR padding delay in microseconds (0, 32, 64, 128 or 256)",
-                  paddingDelayUsec);
-     cmd.AddValue("emlsrTransitionDelay",
-                  "The EMLSR transition delay in microseconds (0, 16, 32, 64, 128 or 256)",
-                  transitionDelayUsec);
-     cmd.AddValue("emlsrAuxSwitch",
-                  "Whether Aux PHY should switch channel to operate on the link on which "
-                  "the Main PHY was operating before moving to the link of the Aux PHY. ",
-                  switchAuxPhy);
-     cmd.AddValue("emlsrAuxChWidth",
-                  "The maximum channel width (MHz) supported by Aux PHYs.",
-                  auxPhyChWidth);
-     cmd.AddValue("emlsrAuxTxCapable",
-                  "Whether Aux PHYs are capable of transmitting.",
-                  auxPhyTxCapable);
-     cmd.AddValue("channelSwitchDelay",
-                  "The PHY channel switch delay in microseconds",
-                  channelSwitchDelayUsec);
-     cmd.AddValue("distance",
-                  "Distance in meters between the station and the access point",
-                  distance);
-     cmd.AddValue("simulationTime", "Simulation time", simulationTime);
-     cmd.AddValue("udp", "UDP if set to 1, TCP otherwise", udp);
-     cmd.AddValue("downlink",
-                  "Generate downlink flows if set to 1, uplink flows otherwise",
-                  downlink);
-     cmd.AddValue("useRts", "Enable/disable RTS/CTS", useRts);
-     cmd.AddValue("use80Plus80", "Enable/disable use of 80+80 MHz", use80Plus80);
-     cmd.AddValue("mpduBufferSize",
-                  "Size (in number of MPDUs) of the BlockAck buffer",
-                  mpduBufferSize);
-     cmd.AddValue("nStations", "Number of non-AP EHT stations", nStations);
-     cmd.AddValue("dlAckType",
-                  "Ack sequence type for DL OFDMA (NO-OFDMA, ACK-SU-FORMAT, MU-BAR, AGGR-MU-BAR)",
-                  dlAckSeqType);
-     cmd.AddValue("enableUlOfdma",
-                  "Enable UL OFDMA (useful if DL OFDMA is enabled and TCP is used)",
-                  enableUlOfdma);
-     cmd.AddValue("enableBsrp",
-                  "Enable BSRP (useful if DL and UL OFDMA are enabled and TCP is used)",
-                  enableBsrp);
-     cmd.AddValue(
-         "muSchedAccessReqInterval",
-         "Duration of the interval between two requests for channel access made by the MU scheduler",
-         accessReqInterval);
-     cmd.AddValue("mcs", "if set, limit testing to a specific MCS (0-11)", mcs);
-     cmd.AddValue("payloadSize", "The application payload size in bytes", payloadSize);
-     cmd.AddValue("tputInterval", "duration of intervals for throughput measurement", tputInterval);
-     cmd.AddValue("minExpectedThroughput",
-                  "if set, simulation fails if the lowest throughput is below this value",
-                  minExpectedThroughput);
-     cmd.AddValue("maxExpectedThroughput",
-                  "if set, simulation fails if the highest throughput is above this value",
-                  maxExpectedThroughput);
-     cmd.AddValue("enableMultiApCoordination",
-                  "Enable WiFi-8 Multi AP Coordination",
-                  enableMultiApCoordination);
-     cmd.AddValue("reliabilityMode",
-                  "Enable WiFi-8 reliability mode",
-                  reliabilityMode);
+    CommandLine cmd(__FILE__);
+    cmd.AddValue("frequency",
+                "Whether the first link operates in the 2.4, 5 or 6 GHz band (other values gets rejected)",
+                frequencySta);
+    cmd.AddValue("frequency2",
+                "Whether the second link operates in the 2.4, 5 or 6 GHz band (0 means the device has one "
+                "link, otherwise the band must be different than first link and third link)",
+                frequencySta_2);
+    cmd.AddValue("frequency3",
+                "Whether the third link operates in the 2.4, 5 or 6 GHz band (0 means the device has up to "
+                "two links, otherwise the band must be different than first link and second link)",
+                frequencySta_3);
+    cmd.AddValue("emlsrLinks",
+                "The comma separated list of IDs of EMLSR links (for MLDs only)",
+                emlsrLinks);
+    cmd.AddValue("emlsrPaddingDelay",
+                "The EMLSR padding delay in microseconds (0, 32, 64, 128 or 256)",
+                paddingDelayUsec);
+    cmd.AddValue("emlsrTransitionDelay",
+                "The EMLSR transition delay in microseconds (0, 16, 32, 64, 128 or 256)",
+                transitionDelayUsec);
+    cmd.AddValue("emlsrAuxSwitch",
+                "Whether Aux PHY should switch channel to operate on the link on which "
+                "the Main PHY was operating before moving to the link of the Aux PHY. ",
+                switchAuxPhy);
+    cmd.AddValue("emlsrAuxChWidth",
+                "The maximum channel width (MHz) supported by Aux PHYs.",
+                auxPhyChWidth);
+    cmd.AddValue("emlsrAuxTxCapable",
+                "Whether Aux PHYs are capable of transmitting.",
+                auxPhyTxCapable);
+    cmd.AddValue("channelSwitchDelay",
+                "The PHY channel switch delay in microseconds",
+                channelSwitchDelayUsec);
+    cmd.AddValue("distance",
+                "Distance in meters between the station and the access point",
+                distance);
+    cmd.AddValue("simulationTime", "Simulation time", simulationTime);
+    cmd.AddValue("udp", "UDP if set to 1, TCP otherwise", udp);
+    cmd.AddValue("downlink",
+                "Generate downlink flows if set to 1, uplink flows otherwise",
+                downlink);
+    cmd.AddValue("useRts", "Enable/disable RTS/CTS", useRts);
+    cmd.AddValue("use80Plus80", "Enable/disable use of 80+80 MHz", use80Plus80);
+    cmd.AddValue("mpduBufferSize",
+                "Size (in number of MPDUs) of the BlockAck buffer",
+                mpduBufferSize);
+    cmd.AddValue("nStations", "Number of non-AP EHT stations", nStations);
+    cmd.AddValue("dlAckType",
+                "Ack sequence type for DL OFDMA (NO-OFDMA, ACK-SU-FORMAT, MU-BAR, AGGR-MU-BAR)",
+                dlAckSeqType);
+    cmd.AddValue("enableUlOfdma",
+                "Enable UL OFDMA (useful if DL OFDMA is enabled and TCP is used)",
+                enableUlOfdma);
+    cmd.AddValue("enableBsrp",
+                "Enable BSRP (useful if DL and UL OFDMA are enabled and TCP is used)",
+                enableBsrp);
+    cmd.AddValue("muSchedAccessReqInterval",
+                "Duration of the interval between two requests for channel access made by the MU scheduler",
+                accessReqInterval);
+    cmd.AddValue("mcs", "if set, limit testing to a specific MCS (0-11)", mcs);
+    cmd.AddValue("payloadSize", "The application payload size in bytes", payloadSize);
+    cmd.AddValue("tputInterval", "duration of intervals for throughput measurement", tputInterval);
+    cmd.AddValue("minExpectedThroughput",
+                "if set, simulation fails if the lowest throughput is below this value",
+                minExpectedThroughput);
+    cmd.AddValue("maxExpectedThroughput",
+                "if set, simulation fails if the highest throughput is above this value",
+                maxExpectedThroughput);
+    cmd.AddValue("enableMultiApCoordination",
+                "Enable WiFi-8 Multi AP Coordination",
+                enableMultiApCoordination);
+    cmd.AddValue("reliabilityMode",
+                "Enable WiFi-8 reliability mode",
+                reliabilityMode);
     cmd.AddValue("frameAggregation",
                 "Enable frame aggregation",
                 frameAggregation);
-     cmd.Parse(argc, argv);
+    cmd.Parse(argc, argv);
  
-     // LogComponentEnable("ehr-wifi-network-dualband", LOG_LEVEL_FUNCTION);
+    LogComponentEnable("ehr-triband-network", LOG_LEVEL_FUNCTION);
  
      if (useRts)
      {
@@ -1530,19 +1585,27 @@ void PrintMap(const std::map<uint64_t, Time>& myMap)
      }
      Simulator::Schedule (MicroSeconds (100), &TimePasses);
 
-     Ptr<WifiNetDevice> wifiStaDev = DynamicCast<WifiNetDevice>(staDevices.Get(0));
-     m_staAddress = wifiStaDev->GetMac()->GetAddress();
-     std::cout << "DEBUG STA MAC Address : " << m_staAddress << std::endl;
-     for (uint8_t linkId = 0; linkId < wifiStaDev->GetMac()->GetNLinks(); linkId++)
-     {
-        std::cout << "DEBUG STA linkId : " << (int)linkId << " MAC Address : " << wifiStaDev->GetMac()->GetFrameExchangeManager(linkId)->GetAddress() << std::endl;
-     }
+    //  Ptr<WifiNetDevice> wifiStaDev = DynamicCast<WifiNetDevice>(staDevices.Get(0));
+    //  m_staAddress = wifiStaDev->GetMac()->GetAddress();
+    //  std::cout << "DEBUG STA MAC Address : " << m_staAddress << std::endl;
+    //  for (uint8_t linkId = 0; linkId < wifiStaDev->GetMac()->GetNLinks(); linkId++)
+    //  {
+    //     std::cout << "DEBUG STA linkId : " << (int)linkId << " MAC Address : " << wifiStaDev->GetMac()->GetFrameExchangeManager(linkId)->GetAddress() << std::endl;
+    //  }
 
-     m_staDevices = staDevices;
+    m_staDevices = staDevices;
+    Ptr<WifiNetDevice> wifiStaDev = DynamicCast<WifiNetDevice>(staDevices.Get(0));
+    m_staAddress = wifiStaDev->GetMac()->GetAddress();
+    for (uint16_t i = 0; i < apDevices.GetN(); i++)
+    {
+        Ptr<WifiNetDevice> wifiApDev = DynamicCast<WifiNetDevice>(apDevices.Get(i));
+        m_apStaAddressMap[wifiApDev->GetMac()->GetAddress()] = m_staAddress;
+    } 
 
      // Enable tracing
     //  Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpClient/Tx", MakeCallback(&AppTxTrace));
-     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTx", MakeCallback(&MacTxTrace));
+    // Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTx", MakeCallback(&MacTxTrace));
+    Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTxWithAddress", MakeCallback(&MacTxWithAddressTrace));
     //  Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTxDrop", MakeCallback(&DevTxDropTrace));
     //  Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRx", MakeCallback(&MacRxTrace));
      Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRxWithAddress", MakeCallback(&MacRxWithAddressTrace));
@@ -1558,38 +1621,75 @@ void PrintMap(const std::map<uint64_t, Time>& myMap)
      Simulator::Stop(simulationTime + Seconds(1.0));
      Simulator::Run();
  
-     auto tolerance = 0.10;
-     cumulRxBytes = GetRxBytes(udp, serverApp, payloadSize);
-     auto rxBytes = std::accumulate(cumulRxBytes.cbegin(), cumulRxBytes.cend(), 0.0);
-     auto throughput = (rxBytes * 8) / simulationTime.GetMicroSeconds(); // Mbit/s
-     double reliability;
+    //  auto tolerance = 0.10;
+    //  cumulRxBytes = GetRxBytes(udp, serverApp, payloadSize);
+    //  auto rxBytes = std::accumulate(cumulRxBytes.cbegin(), cumulRxBytes.cend(), 0.0);
+    //  auto throughput = (rxBytes * 8) / simulationTime.GetMicroSeconds(); // Mbit/s
+    //  double reliability;
      
-     if(reliabilityMode)
-     {
-        reliability = (double) m_macRxMap.size()/ m_phyTxMap.size();
-     }
-     else
-     {
-        reliability = (double) m_rxPackets/m_phyTxPackets;
-     }
+    //  if(reliabilityMode)
+    //  {
+    //     reliability = (double) m_macRxMap.size()/ m_phyTxMap.size();
+    //  }
+    //  else
+    //  {
+    //     reliability = (double) m_rxPackets/m_phyTxPackets;
+    //  }
  
-     CalculateE2EDelay(m_macTxMap);
-     m_avgDelay = m_sumDelay / m_rxPackets;
-     CalculateChAccessDelay(m_phyTxMap);
-     m_avgChAccessDelay = m_sumChAccessDelay / m_rxPackets;
+    //  CalculateE2EDelay(m_sumDelay, m_macTxMap, m_macRxMap);
+    //  m_avgDelay = m_sumDelay / m_rxPackets;
+    //  CalculateChAccessDelay(m_sumChAccessDelay, m_phyTxMap, m_macRxMap);
+    //  m_avgChAccessDelay = m_sumChAccessDelay / m_rxPackets;
      
-     std::cout << "PhyTxPackets : " << m_phyTxPackets << std::endl;
-     std::cout << "TxPackets : " << m_txPackets << std::endl;
-     std::cout << "PhyRxPackets : " << m_phyRxPackets << std::endl;
-     std::cout << "RxPackets : " << m_rxPackets << std::endl;
+    //  std::cout << "PhyTxPackets : " << m_phyTxPackets << std::endl;
+    //  std::cout << "TxPackets : " << m_txPackets << std::endl;
+    // //  std::cout << "PhyRxPackets : " << m_phyRxPackets << std::endl;
+    //  std::cout << "RxPackets : " << m_rxPackets << std::endl;
  
-     std::cout << +mcs << "\t\t\t" << widthStr << " MHz\t\t"
-                           << (widthStr.size() > 3 ? "" : "\t") << gi << " ns\t\t\t" << throughput
-                           << " Mbit/s" << std::endl;
-     std::cout << "Reliability : " << reliability*100 << "%" << std::endl;
-     std::cout << "Average E2E Delay: " << m_avgDelay.As(Time::MS) << std::endl;
-     std::cout << "Average Ch Acess Delay: " << m_avgChAccessDelay.As(Time::MS) << std::endl;
- 
+    //  std::cout << +mcs << "\t\t\t" << widthStr << " MHz\t\t"
+    //                        << (widthStr.size() > 3 ? "" : "\t") << gi << " ns\t\t\t" << throughput
+    //                        << " Mbit/s" << std::endl;
+    //  std::cout << "Reliability : " << reliability*100 << "%" << std::endl;
+    //  std::cout << "Average E2E Delay: " << m_avgDelay.As(Time::MS) << std::endl;
+    //  std::cout << "Average Ch Acess Delay: " << m_avgChAccessDelay.As(Time::MS) << std::endl;
+     
+     for (auto& [macAddresss, analysis] : analysisMap) 
+     {
+        if (analysis.phyTxPackets > analysis.txPackets)
+        {
+            analysis.phyTxMap = CompareMap(analysis.phyTxMap, analysis.macTxMap);
+        }
+
+        std::cout << "\n=== STA: " << macAddresss << " ===" << std::endl;
+        
+        std::cout << "TxPackets : " << analysis.txPackets << std::endl;
+        std::cout << "PhyTxPackets : " << analysis.phyTxMap.size() << std::endl;
+        std::cout << "RxPackets : " << analysis.rxPackets << std::endl;
+
+        auto throughput = (double) (analysis.rxPackets * 8 * payloadSize) / simulationTime.GetMicroSeconds();
+        double reliability;
+        if(reliabilityMode)
+        {
+        reliability = (double) analysis.macRxMap.size()/ analysis.phyTxMap.size();
+        }
+        else
+        {
+        reliability = (double) analysis.macRxMap.size()/ analysis.phyTxMap.size();//(double) analysis.rxPackets/analysis.phyTxPackets;
+        }
+
+        CalculateE2EDelay(analysis.sumDelay, analysis.macTxMap, analysis.macRxMap);
+        analysis.avgDelay = analysis.sumDelay/analysis.rxPackets;
+
+        CalculateChAccessDelay(analysis.sumChAccessDelay, analysis.phyTxMap, analysis.macRxMap);
+        analysis.avgChAccessDelay = analysis.sumChAccessDelay/analysis.rxPackets;
+
+        std::cout << "\nPerformance Evaluation" << std::endl;
+        std::cout << "Throughput : " << throughput << " Mbit/s" << std::endl;
+        std::cout << "Reliability : " << reliability*100 << "%" << std::endl;
+        std::cout << "Average E2E Delay: " << analysis.avgDelay.As(Time::MS) << std::endl;
+        std::cout << "Average Ch Acess Delay: " << analysis.avgChAccessDelay.As(Time::MS) << std::endl;
+    }
+
      Simulator::Destroy();
  
      return 0;

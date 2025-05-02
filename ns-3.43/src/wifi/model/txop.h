@@ -563,6 +563,9 @@ class Txop : public Object
     BackoffValueTracedCallback m_backoffTrace; //!< backoff trace value
     CwValueTracedCallback m_cwTrace;           //!< CW trace value
 
+    TracedCallback<Mac48Address, Ptr<const Packet>> m_startChRequestAccessTrace;
+    TracedCallback<Mac48Address, Ptr<const Packet>> m_grantedChRequestAccessTrace;
+
   private:
     /**
      * Create a LinkEntity object.

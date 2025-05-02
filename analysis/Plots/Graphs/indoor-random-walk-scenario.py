@@ -82,7 +82,8 @@ plt.tight_layout()
 # Save as PDF
 plt.savefig('indoor-random-walk-scenario.pdf',
            bbox_inches='tight',
-           dpi=300)
+           dpi=300,
+    	   format='pdf')
 plt.close()
 
 print("Plot saved as 'indoor-random-walk-scenario.pdf'")

@@ -1038,6 +1038,7 @@ MinstrelHtWifiManager::DoGetDataTxVector(WifiRemoteStation* st, MHz_u allowedWid
         if (m_currentRate != dataRate && !station->m_isSampling)
         {
             NS_LOG_DEBUG("New datarate: " << dataRate);
+            std::cout << "New datarate: " << dataRate << std::endl;
             m_currentRate = dataRate;
         }
         return vector;
@@ -1085,6 +1086,7 @@ MinstrelHtWifiManager::DoGetDataTxVector(WifiRemoteStation* st, MHz_u allowedWid
     if (m_currentRate != dataRate && !station->m_isSampling)
     {
         NS_LOG_DEBUG("New datarate: " << dataRate);
+        std::cout << "New datarate: " << dataRate << std::endl;
         m_currentRate = dataRate;
     }
     return txVector;

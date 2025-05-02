@@ -812,9 +812,11 @@ void
 HtFrameExchangeManager::RetransmitMpduAfterMissedAck(Ptr<WifiMpdu> mpdu) const
 {
     NS_LOG_FUNCTION(this << *mpdu);
-
+    
     if (mpdu->GetHeader().IsQosData())
     {
+        m_retransmitMpduTrace(m_mac->GetAddress(),mpdu->GetProtocolDataUnit());
+        
         uint8_t tid = mpdu->GetHeader().GetQosTid();
         Ptr<QosTxop> edca = m_mac->GetQosTxop(tid);
 
@@ -1442,6 +1444,8 @@ HtFrameExchangeManager::MissedBlockAck(Ptr<WifiPsdu> psdu,
         if (!GetWifiRemoteStationManager()->NeedRetransmission(*psdu->begin()))
         {
             NS_LOG_DEBUG("Missed Block Ack, do not retransmit the data frames");
+            NS_LOG_INFO("Missed Block Ack, do not retransmit the data frames");
+            std::cout << "tolol1" << std::endl;
             GetWifiRemoteStationManager()->ReportFinalDataFailed(*psdu->begin());
             for (const auto& mpdu : *PeekPointer(psdu))
             {
@@ -1453,6 +1457,8 @@ HtFrameExchangeManager::MissedBlockAck(Ptr<WifiPsdu> psdu,
         else
         {
             NS_LOG_DEBUG("Missed Block Ack, retransmit data frames");
+            NS_LOG_INFO("Missed Block Ack, retransmit data frames");
+            std::cout << "tolol2" << std::endl;
             GetBaManager(tid)->NotifyMissedBlockAck(m_linkId, recipientMld, tid);
             resetCw = false;
         }

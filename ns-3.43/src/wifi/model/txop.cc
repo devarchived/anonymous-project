@@ -159,7 +159,15 @@ Txop::GetTypeId()
             .AddTraceSource("CwTrace",
                             "Trace source for contention window values",
                             MakeTraceSourceAccessor(&Txop::m_cwTrace),
-                            "ns3::Txop::CwValueTracedCallback");
+                            "ns3::Txop::CwValueTracedCallback")
+            .AddTraceSource("StartChRequestAccess",
+                            "Trace source when a packet request for channel access",
+                            MakeTraceSourceAccessor(&Txop::m_startChRequestAccessTrace),
+                            "ns3::Packet::TracedCallback")
+            .AddTraceSource("AccesRequestGranted",
+                            "Trace source when a packet is granted for channel access",
+                            MakeTraceSourceAccessor(&Txop::m_grantedChRequestAccessTrace),
+                            "ns3::Packet::TracedCallback");
     return tid;
 }
 
@@ -690,6 +698,18 @@ Txop::StartAccessAfterEvent(uint8_t linkId, bool hadFramesToTransmit, bool check
 {
     NS_LOG_FUNCTION(this << linkId << hadFramesToTransmit << checkMediumBusy);
 
+    Ptr<const WifiMpdu> mpdu = m_queue->Peek(linkId);
+    if (mpdu)
+    {
+        NS_LOG_INFO("Requesting channel access for packet on link " << +linkId
+                     << " with p : " << mpdu->GetProtocolDataUnit()->GetUid());
+        m_startChRequestAccessTrace(m_mac->GetAddress(), mpdu->GetProtocolDataUnit());
+    }
+    else
+    {
+        NS_LOG_INFO("No packet available in the queue for link " << +linkId);
+    }
+    
     if (!m_mac->GetWifiPhy(linkId))
     {
         NS_LOG_DEBUG("No PHY operating on link " << +linkId);
@@ -743,6 +763,15 @@ Txop::NotifyAccessRequested(uint8_t linkId)
 {
     NS_LOG_FUNCTION(this << linkId);
     GetLink(linkId).access = REQUESTED;
+
+    Ptr<const WifiMpdu> mpdu = m_queue->Peek(linkId);
+    if (mpdu)
+    {
+        auto uid = mpdu->GetProtocolDataUnit()->GetUid();
+        NS_LOG_INFO("Requesting channel access for packet on link " << +linkId
+                             << " with p : " << mpdu->GetProtocolDataUnit()->GetUid());
+        m_startChRequestAccessTrace(m_mac->GetAddress(), mpdu->GetProtocolDataUnit());
+    }
 }
 
 void
@@ -750,6 +779,14 @@ Txop::NotifyChannelAccessed(uint8_t linkId, Time txopDuration)
 {
     NS_LOG_FUNCTION(this << linkId << txopDuration);
     GetLink(linkId).access = GRANTED;
+
+    Ptr<const WifiMpdu> mpdu = m_queue->Peek(linkId);
+    if (mpdu)
+    {
+        auto uid = mpdu->GetProtocolDataUnit()->GetUid();
+        NS_LOG_INFO("Channel access granted in " <<  m_mac->GetAddress() << " for p: " << uid);
+        m_grantedChRequestAccessTrace(m_mac->GetAddress(), mpdu->GetProtocolDataUnit());
+    }
 }
 
 void

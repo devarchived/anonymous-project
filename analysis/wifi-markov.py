@@ -18,7 +18,7 @@ def calculate_collision_probability(tau, n_obss):
 def calculate_failure_probability(tau, n_obss, p_error):
     """Calculate the total failed transmission probability p."""
     p_coll = calculate_collision_probability(tau, n_obss)
-    return 1 - (1 - p_coll)*(1 - p_error)
+    return 1 - (1 - p_coll)*(1 - p_error) 
 
 def calculate_tau(p, w_0, m):
     """Calculate the transmission probability tau."""
@@ -53,13 +53,17 @@ def calculate_collision_time(phy_header, mac_header, packet_length, difs, prop_d
     """Calculate the time for a collision."""
     return phy_header + mac_header + packet_length + difs + prop_delay
 
-def calculate_throughput(p_transmit, p_success, p_error, packet_length, data_rate, slot_size, t_success, t_collision, t_error):
+def calculate_throughput(n_obss, p_transmit, p_success, p_error, packet_length, data_rate, slot_size, t_success, t_collision, t_error):
     """Calculate the throughput."""
-    numerator = p_transmit * p_success * (1 - p_error)* packet_length * data_rate
+    numerator = p_transmit * p_success * (1 - p_error)* packet_length * data_rate * 1/n_obss
     denominator = ((1 - p_transmit) * slot_size + 
                   p_transmit * p_success * (1 - p_error) * t_success + 
                   p_transmit * (1 - p_success) * t_collision + p_transmit*p_success*p_error*t_error)
     return numerator / denominator
+
+def calculate_first_transmission_reliability(tau, p, n_obss):
+    """Calculate the reliability."""
+    return 0
 
 def calculate_reliability(p, m):
     """Calculate the reliability."""
@@ -67,8 +71,9 @@ def calculate_reliability(p, m):
 
 def calculate_delay(p, p_collision, p_error, m, w_0, slot_size, t_success, t_collision, t_error):
     """Calculate the average delay."""
-    p = min(p, 0.99999)
+    p = np.clip(p, 0.0001, 0.9999)
     t_backoff = 0
+    
     for i in range(m):
         p_s = (1 - p) * np.power(p, i)
         mean_t_slot = 0
@@ -110,6 +115,8 @@ def run_simulation_for_band(band_params, common_params):
         
         if abs(tau_new - tau) < eps:
             print('Last iteration ', it)
+            print("Transmission probability (τ): ", tau)
+            print("Collision probability (p): ", p)
             break
     
     # Account the channel error probability
@@ -125,10 +132,11 @@ def run_simulation_for_band(band_params, common_params):
                                          band_params.difs, prop_delay)
     t_error = t_success
     
-    stable_data_rate = min(packet_size * 8 * lambda_poisson,data_rate)
-    throughput = calculate_throughput(p_transmit, p_success, band_params.p_error, packet_length, data_rate, slot_size, t_success, t_collision, t_error)
+    #stable_data_rate = min(packet_size * 8 * lambda_poisson,data_rate) #No need to use stable data rate in saturated case
+    throughput = calculate_throughput(band_params.n_obss, p_transmit, p_success, band_params.p_error, packet_length, data_rate, slot_size, t_success, t_collision, t_error)
     reliability = calculate_reliability(p, m)
     delay = calculate_delay(p, p_collision, band_params.p_error, m, w_0, slot_size, t_success, t_collision, t_error)
+    print(delay)
     
     return {
         'band': band_params.name,
@@ -177,7 +185,9 @@ def calculate_final_metrics(results):
     
     # Calculate averages
     num_bands = len(results)
+    print("Debugging num_band : ", num_bands)
     avg_reliability = reliability_sum / num_bands if num_bands > 0 else 0
+    print("Debugging delay_sum : ", delay_sum)
     avg_delay = delay_sum / num_bands if num_bands > 0 else 0
     
     # Calculate reliability for JT reliability mode
@@ -199,12 +209,15 @@ def run_analysis_for_n_obss(n_obss_values, bands_template, common_params):
         'max_throughput': [],
         'avg_reliability': [],
         'jt_reliability' : [],
+        'first_transmission_reliability' : [],
+        'jt_first_transmission_reliability' : [],
         'avg_delay': [],
         'min_delay': []
     }
     
     for n in n_obss_values:
         # Create bands with current n_obss value
+        print("Debugging n_obss: ", n)
         bands = [
             BandParameters(name=b.name, frequency=b.frequency, 
                          difs=b.difs, sifs=b.sifs, n_obss=n, p_error=b.p_error)
@@ -216,12 +229,26 @@ def run_analysis_for_n_obss(n_obss_values, bands_template, common_params):
         
         # Calculate aggregate metrics
         temp = calculate_final_metrics(results)
-        
+
+        # Calculate first_transmission_reliability
+        first_transmission_reliability_sum = 0
+        for result in results:
+            first_transmission_reliability_sum += (1 - result['p'])
+        first_transmission_reliability = first_transmission_reliability_sum / len(results)
+
+        # Calculate jt_first_transmission_reliability
+        total_first_transmission_reliability = 1
+        for result in results:
+            total_first_transmission_reliability *= result['p']
+        jt_first_transmission_reliability = 1 - total_first_transmission_reliability
+
         # Store metrics
         result_summary['total_throughput'].append(temp['total_throughput'])
         result_summary['max_throughput'].append(temp['max_throughput'])
         result_summary['avg_reliability'].append(temp['avg_reliability'])
         result_summary['jt_reliability'].append(temp['jt_reliability'])
+        result_summary['first_transmission_reliability'].append(first_transmission_reliability)
+        result_summary['jt_first_transmission_reliability'].append(jt_first_transmission_reliability)
         result_summary['avg_delay'].append(temp['avg_delay'])
         result_summary['min_delay'].append(temp['min_delay'])
     
@@ -256,7 +283,24 @@ def plot_reliability(n_obss_values, result_summary):
     
     plt.xlabel('Number of OBSS (n_obss)')
     plt.ylabel('Reliability (%)')
-    plt.title('Reliability vs Number of OBSS')
+    plt.title('Packets Received Reliability vs Number of OBSS')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+def plot_first_trans_reliability(n_obss_values, result_summary):
+    """Plot reliability against n_obss values."""
+    
+    plt.figure(figsize=(8, 5))
+    
+    plt.plot(n_obss_values, [r*100 for r in result_summary['first_transmission_reliability']], 'bo-', label='WiFi 8 JT Th Mode')
+    plt.plot(n_obss_values, [r*100 for r in result_summary['jt_first_transmission_reliability']], 'go-', label='WiFi 8 JT Rel Mode')
+    plt.plot(n_obss_values, [r*100 for r in result_summary['first_transmission_reliability']], 'r+--', label='WiFi 7 MLO-STR')
+
+    
+    plt.xlabel('Number of OBSS (n_obss)')
+    plt.ylabel('Reliability (%)')
+    plt.title('First Transmission Reliability vs Number of OBSS')
     plt.legend()
     plt.grid(True)
     plt.show()
@@ -282,19 +326,19 @@ def main():
     # Common parameters across all bands
     common_params = {
         'alpha': 0.5,
-        'eps': 1e-6,
-        'max_iter': 1000,
-        'tau': 0.5,
+        'eps': 1e-10,
+        'max_iter': 10000,
+        'tau': 0.2,
         'w_0': 16,
         'm': 6,
-        'lambda_poisson' : 3000,
-        'data_rate': 7.3125e6,
-        'phy_header': 52e-6,
+        'lambda_poisson' : 1000,
+        'data_rate': 121.875e6,
+        'phy_header': 48e-6,
         'mac_header_size': 26,
         'ack_size': 14,
         'slot_size': 9e-6,
-        'prop_delay': 3e-9,
-        'packet_size': 700
+        'prop_delay': 67e-9,
+        'packet_size': 1500
     }
     
     # Define parameters for different bands
@@ -373,6 +417,7 @@ def main():
 
     plot_throughput(n_obss_values,result_summary)
     plot_reliability(n_obss_values,result_summary)
+    plot_first_trans_reliability(n_obss_values,result_summary)
     plot_delay(n_obss_values,result_summary)
     
 if __name__ == "__main__":

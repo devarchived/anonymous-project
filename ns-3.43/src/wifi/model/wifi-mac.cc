@@ -288,6 +288,12 @@ WifiMac::GetTypeId()
                             "queueing for transmission.",
                             MakeTraceSourceAccessor(&WifiMac::m_macTxTrace),
                             "ns3::Packet::TracedCallback")
+            .AddTraceSource("MacTxWithAddress",
+                            "A packet has been received from higher layers and is being processed "
+                            "in preparation for "
+                            "queueing for transmission.Now added with the MAC Adress of the MAC layer",
+                            MakeTraceSourceAccessor(&WifiMac::m_macTxAddressTrace),
+                            "ns3::Packet::TracedCallback")
             .AddTraceSource(
                 "MacTxDrop",
                 "A packet has been dropped in the MAC layer before being queued for transmission. "
@@ -712,6 +718,8 @@ void
 WifiMac::NotifyTx(Ptr<const Packet> packet)
 {
     m_macTxTrace(packet);
+    m_macTxAddressTrace(GetAddress(),packet);
+
 }
 
 void

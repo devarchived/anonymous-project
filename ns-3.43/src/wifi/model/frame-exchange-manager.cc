@@ -38,7 +38,18 @@ FrameExchangeManager::GetTypeId()
     static TypeId tid = TypeId("ns3::FrameExchangeManager")
                             .SetParent<Object>()
                             .AddConstructor<FrameExchangeManager>()
-                            .SetGroupName("Wifi");
+                            .SetGroupName("Wifi")
+                            .AddTraceSource("FemMpduDropped",
+                                            "Trace source indicating a packet"
+                                            "has been dropped after maximum number of retries",
+                                            MakeTraceSourceAccessor(&FrameExchangeManager::m_droppedMpduTrace),
+                                            "ns3::Packet::TracedCallback")
+                            .AddTraceSource("FemMpduRetransmitted",
+                                            "Trace source indicating a packet"
+                                            "has been retransmitted after maximum number of retries",
+                                            MakeTraceSourceAccessor(&FrameExchangeManager::m_retransmitMpduTrace),
+                                            "ns3::Packet::TracedCallback");
+    
     return tid;
 }
 
@@ -269,6 +280,7 @@ FrameExchangeManager::NotifyPacketDiscarded(Ptr<const WifiMpdu> mpdu)
 {
     NS_ASSERT(!m_droppedMpduCallback.IsNull());
     m_droppedMpduCallback(WIFI_MAC_DROP_REACHED_RETRY_LIMIT, mpdu);
+    m_droppedMpduTrace(m_mac->GetAddress(),mpdu->GetProtocolDataUnit());
 }
 
 void
@@ -1024,6 +1036,8 @@ FrameExchangeManager::NormalAckTimeout(Ptr<WifiMpdu> mpdu, const WifiTxVector& t
     if (!GetWifiRemoteStationManager()->NeedRetransmission(mpdu))
     {
         NS_LOG_DEBUG("Missed Ack, discard MPDU");
+        NS_LOG_INFO("Missed Ack, discard MPDU p: " << mpdu->GetPacket()->GetUid());
+        // std::cout << "Missed Ack, discard MPDU p: " << mpdu->GetPacket()->GetUid() << std::endl;
         NotifyPacketDiscarded(mpdu);
         // Dequeue the MPDU if it is stored in a queue
         DequeueMpdu(mpdu);
@@ -1033,6 +1047,8 @@ FrameExchangeManager::NormalAckTimeout(Ptr<WifiMpdu> mpdu, const WifiTxVector& t
     else
     {
         NS_LOG_DEBUG("Missed Ack, retransmit MPDU");
+        NS_LOG_INFO("Missed Ack, retransmit MPDU p: " << mpdu->GetPacket()->GetUid());
+        // std::cout << "Missed Ack, retransmit MPDU p: " << mpdu->GetPacket()->GetUid() << std::endl;
         if (mpdu->IsQueued()) // the MPDU may have been removed due to lifetime expiration
         {
             mpdu = m_mac->GetTxopQueue(mpdu->GetQueueAc())->GetOriginal(mpdu);
@@ -1051,6 +1067,7 @@ void
 FrameExchangeManager::RetransmitMpduAfterMissedAck(Ptr<WifiMpdu> mpdu) const
 {
     NS_LOG_FUNCTION(this << *mpdu);
+    m_retransmitMpduTrace(m_mac->GetAddress(),mpdu->GetProtocolDataUnit());
 }
 
 void

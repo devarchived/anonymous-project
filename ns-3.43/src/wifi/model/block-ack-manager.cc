@@ -525,6 +525,7 @@ BlockAckManager::NotifyMissedBlockAck(uint8_t linkId, const Mac48Address& recipi
             continue;
         }
         mpduIt = HandleInFlightMpdu(linkId, mpduIt, TO_RETRANSMIT, it, now);
+        std::cout << "Missed Ack, retransmit MPDU p: " << (*mpduIt)->GetPacket()->GetUid() << std::endl;
     }
 }
 

@@ -197,6 +197,8 @@ PhyEntity::CalculatePhyPreambleAndHeaderDuration(const WifiTxVector& txVector) c
     {
         duration += GetDuration(static_cast<WifiPpduField>(field), txVector);
     }
+    // std::cout << "PhyEntity::CalculatePhyPreambleAndHeaderDuration: "
+    //           << "duration = " << duration.As(Time::NS) << std::endl;
     return duration;
 }
 

@@ -629,6 +629,10 @@ StaWifiMac::SendAssociationRequest(bool isReassoc)
         {
             uint8_t linkId = it->first;
             auto& link = GetLink(linkId);
+            // if (!link.bssid.has_value())
+            // {
+            //     continue;
+            // }
             NS_ABORT_MSG_IF(!link.bssid.has_value(),
                     "No BSSID set for the link on which the (Re)Association Request is to be sent");
 

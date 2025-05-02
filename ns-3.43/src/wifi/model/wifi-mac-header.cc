@@ -1007,6 +1007,7 @@ WifiMacHeader::GetSize() const
         }
         break;
     }
+
     return size;
 }
 

@@ -388,6 +388,7 @@ MinstrelWifiManager::GetDataTxVector(MinstrelWifiRemoteStation* station)
     if (m_currentRate != rate && !station->m_isSampling)
     {
         NS_LOG_DEBUG("New datarate: " << rate);
+        // std::cout << "New datarate: " << rate << std::endl;
         m_currentRate = rate;
     }
     return WifiTxVector(

@@ -130,13 +130,17 @@ def calculate_collision_time(phy_header, mac_header, packet_length, difs, prop_d
     """Calculate the time for a collision."""
     return phy_header + mac_header + packet_length + difs + prop_delay
 
-def calculate_throughput(p_transmit, p_success, p_error, packet_length, data_rate, slot_size, t_success, t_collision, t_error):
+def calculate_throughput(n_obss, p_transmit, p_success, p_error, packet_length, data_rate, slot_size, t_success, t_collision, t_error, rho, mu, packet_size, n_links):
     """Calculate the throughput."""
-    numerator = p_transmit * p_success * (1 - p_error)* packet_length * data_rate
-    denominator = ((1 - p_transmit) * slot_size + 
-                  p_transmit * p_success * (1 - p_error) * t_success + 
-                  p_transmit * (1 - p_success) * t_collision + p_transmit*p_success*p_error*t_error)
-    return numerator / denominator
+    # numerator = p_transmit * p_success * (1 - p_error)* 1/n_obss * packet_length * data_rate
+    # denominator = ((1 - p_transmit) * slot_size + 
+    #               p_transmit * p_success * (1 - p_error) * t_success + 
+    #               p_transmit * (1 - p_success) * t_collision + p_transmit*p_success*p_error*t_error)
+
+    # th = numerator / denominator
+
+    th = n_links * rho * mu * packet_size * 8
+    return th
 
 def calculate_reliability(p, m):
     """Calculate the reliability."""
@@ -158,8 +162,10 @@ def run_simulation_for_band(band_params, common_params):
     rho = common_params['rho']
     w_0 = common_params['w_0']
     m = common_params['m']
+    M = common_params['M']
     n_links = common_params['n_links']
     data_rate = common_params['data_rate']
+    min_data_rate = common_params['min_data_rate']
     lambda_poisson = common_params['lambda_poisson']
     phy_header = common_params['phy_header']
     mac_header_size = common_params['mac_header_size']
@@ -169,8 +175,8 @@ def run_simulation_for_band(band_params, common_params):
     packet_size = common_params['packet_size']
     
     # Calculate derived parameters
-    mac_header = mac_header_size * 8 / data_rate
-    ack = ack_size * 8 / data_rate
+    mac_header = mac_header_size * 8 / min_data_rate
+    ack = ack_size * 8 / min_data_rate
     packet_length = packet_size * 8 / data_rate
     
     t_success = calculate_success_time(phy_header, mac_header, packet_length, band_params.difs, band_params.sifs, ack, prop_delay)
@@ -221,7 +227,7 @@ def run_simulation_for_band(band_params, common_params):
 
     # Calculate performance metrics
     stable_data_rate = min(packet_size * 8 * lambda_poisson,n_links*data_rate)
-    throughput = calculate_throughput(p_transmit, p_success, band_params.p_error, packet_length, stable_data_rate, slot_size, t_success, t_collision, t_error)
+    throughput = calculate_throughput(band_params.n_obss, p_transmit, p_success, band_params.p_error, packet_length, data_rate, slot_size, t_success, t_collision, t_error, rho, mu, packet_size, n_links)
     reliability = calculate_reliability(p, m)
     delay = calculate_delay(mean_service_time, mean_waiting_time)
     
@@ -354,19 +360,21 @@ def main():
         'alpha': 0.5,
         'eps': 1e-6,
         'max_iter': 50000,
-        'tau': 0.5,
-        'rho': 0.5,
+        'tau': 0.4,
+        'rho': 0.4,
         'w_0': 16,
         'm': 6,
+        'M': 7,
         'n_links' : 3,
-        'lambda_poisson' : 3000,
-        'data_rate': 7.3125e6,
+        'lambda_poisson' : 100,
+        'data_rate': 121.875e6,
+        'min_data_rate': 7.25e6,
         'phy_header': 52e-6,
         'mac_header_size': 26,
         'ack_size': 14,
         'slot_size': 9e-6,
-        'prop_delay': 3e-9,
-        'packet_size': 700
+        'prop_delay': 67e-9,
+        'packet_size': 1474
     }
 
     # Define parameters for different bands
