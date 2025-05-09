@@ -46,7 +46,8 @@ class Building : public Object
     {
         Residential,
         Office,
-        Commercial
+        Commercial,
+        Factory
     };
 
     /**
@@ -184,7 +185,7 @@ class Building : public Object
      * \return the number of the room along the X axis where the
      * position falls
      */
-    uint16_t GetRoomX(Vector position) const;
+    virtual uint16_t GetRoomX(Vector position) const;
 
     /**
      *
@@ -194,7 +195,7 @@ class Building : public Object
      * \return  the number of the room along the Y axis where the
      * position falls
      */
-    uint16_t GetRoomY(Vector position) const;
+    virtual uint16_t GetRoomY(Vector position) const;
 
     /**
      *

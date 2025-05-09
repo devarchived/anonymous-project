@@ -148,6 +148,7 @@ RecipientBlockAckAgreement::NotifyReceivedMpdu(Ptr<const WifiMpdu> mpdu)
     }
     else if (distance < SEQNO_SPACE_HALF_SIZE)
     {
+        
         // 1. Store the received MPDU in the buffer, if no MSDU with the same sequence
         // number is already present
         m_bufferedMpdus.insert({{mpdu->GetHeader().GetSequenceNumber(), &m_winStartB}, mpdu});

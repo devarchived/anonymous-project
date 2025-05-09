@@ -889,6 +889,126 @@ ThreeGppIndoorOpenOfficeChannelConditionModel::ComputePlos(Ptr<const MobilityMod
 
 // ------------------------------------------------------------------------- //
 
+NS_OBJECT_ENSURE_REGISTERED(ThreeGppIndoorFactoryChannelConditionModel);
+
+TypeId
+ThreeGppIndoorFactoryChannelConditionModel::GetTypeId()
+{
+    static TypeId tid = TypeId("ns3::ThreeGppIndoorFactoryChannelConditionModel")
+                            .SetParent<ThreeGppChannelConditionModel>()
+                            .SetGroupName("Propagation")
+                            .AddConstructor<ThreeGppIndoorFactoryChannelConditionModel>()
+                            .AddAttribute("FactoryType",
+                                "Type of 3GPP indoor factory model",
+                                StringValue("InF-SL"),
+                                MakeStringAccessor(&ThreeGppIndoorFactoryChannelConditionModel::m_factoryType),
+                                MakeStringChecker());
+    return tid;
+}
+
+ThreeGppIndoorFactoryChannelConditionModel::ThreeGppIndoorFactoryChannelConditionModel()
+    : ThreeGppChannelConditionModel()
+{
+}
+
+ThreeGppIndoorFactoryChannelConditionModel::~ThreeGppIndoorFactoryChannelConditionModel()
+{
+}
+
+double
+ThreeGppIndoorFactoryChannelConditionModel::ComputePlos(Ptr<const MobilityModel> a,
+                                                           Ptr<const MobilityModel> b) const
+{
+    // compute the 2D distance between a and b
+    double distance2D = Calculate2dDistance(a->GetPosition(), b->GetPosition());
+
+    // NOTE: no indication is given about the UT height used to derive the
+    // LOS probability
+
+    double h_c = 5.0;
+    double h_UT = std::min(a->GetPosition().z, b->GetPosition().z);
+
+    // retrieve h_BS, it should be equal to 3 m
+    double h_BS = 0.0;
+    if(m_factoryType == "InF-SL")
+    {
+        h_BS = h_c;
+    }
+    else if(m_factoryType == "InF-DL")
+    {
+        h_BS = h_c;
+    }
+    else if(m_factoryType == "InF-SH")
+    {
+        h_BS = h_c + 2.5;
+    }
+    else if(m_factoryType == "InF-DH")
+    {
+        h_BS = h_c + 2.5;
+    }
+    else
+    {
+        NS_ABORT_MSG("IndoorFactory model type is invalid");
+    }
+    
+    double d_clutter = 0.0;
+    if(m_factoryType == "InF-SL")
+    {
+        d_clutter = 10;
+    }
+    else if(m_factoryType == "InF-DL")
+    {
+        d_clutter = 2;
+    }
+    else if(m_factoryType == "InF-SH")
+    {
+        d_clutter = 10;
+    }
+    else if(m_factoryType == "InF-DH")
+    {
+        d_clutter = 2;
+    }
+    else
+    {
+        NS_ABORT_MSG("IndoorFactory model type is invalid");
+    }
+
+    double r = 0.0;
+    if(m_factoryType == "InF-SL" || m_factoryType == "InF-SH")
+    {
+        r = 0.2;
+    }
+    else if(m_factoryType == "InF-DL" || m_factoryType == "InF-DH")
+    {
+        r = 0.7;
+    }
+    else
+    {
+        NS_ABORT_MSG("IndoorFactory model type is invalid");
+    }
+
+    double k_subsce = 0.0;
+    if(m_factoryType == "InF-SL" || m_factoryType == "InF-DL")
+    {
+        k_subsce = -d_clutter/(log(1-r));
+    }
+    else if(m_factoryType == "InF-SH" || m_factoryType == "InF-DH")
+    {
+        k_subsce = -(d_clutter/(log(1-r)))*((h_BS-h_UT)/(h_c-h_UT));
+    }
+    else
+    {
+        NS_ABORT_MSG("IndoorFactory model type is invalid");
+    }
+
+    // compute the LOS probability (see 3GPP TR 38.901, Sec. 7.4.2)
+    double pLos = exp(-(distance2D / k_subsce));
+
+    return pLos;
+}
+
+// ------------------------------------------------------------------------- //
+
 NS_OBJECT_ENSURE_REGISTERED(ThreeGppNTNDenseUrbanChannelConditionModel);
 
 TypeId

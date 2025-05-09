@@ -186,6 +186,14 @@ BlockAckAgreement::GetBlockAckReqType() const
 std::size_t
 BlockAckAgreement::GetDistance(uint16_t seqNumber, uint16_t startingSeqNumber)
 {
+    if (seqNumber >= SEQNO_SPACE_SIZE || startingSeqNumber >= SEQNO_SPACE_SIZE)
+    {
+        NS_LOG_ERROR("Invalid sequence number: seqNumber = " << seqNumber
+                     << ", startingSeqNumber = " << startingSeqNumber);
+        // Return a default value or handle the error appropriately
+        return 0;
+    }
+    
     NS_ASSERT(seqNumber < SEQNO_SPACE_SIZE && startingSeqNumber < SEQNO_SPACE_SIZE);
     return (seqNumber - startingSeqNumber + SEQNO_SPACE_SIZE) % SEQNO_SPACE_SIZE;
 }

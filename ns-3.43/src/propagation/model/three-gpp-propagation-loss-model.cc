@@ -17,6 +17,7 @@
 #include "ns3/node.h"
 #include "ns3/pointer.h"
 #include "ns3/simulator.h"
+#include "ns3/string.h"
 
 #include <cmath>
 
@@ -1538,6 +1539,179 @@ ThreeGppIndoorOfficePropagationLossModel::GetShadowingCorrelationDistance(
     else if (cond == ChannelCondition::LosConditionValue::NLOS)
     {
         correlationDistance = 6;
+    }
+    else
+    {
+        NS_FATAL_ERROR("Unknown channel condition");
+    }
+
+    return correlationDistance;
+}
+
+NS_OBJECT_ENSURE_REGISTERED(ThreeGppIndoorFactoryPropagationLossModel);
+
+TypeId
+ThreeGppIndoorFactoryPropagationLossModel::GetTypeId()
+{
+    static TypeId tid = TypeId("ns3::ThreeGppIndoorFactoryPropagationLossModel")
+                            .SetParent<ThreeGppPropagationLossModel>()
+                            .SetGroupName("Propagation")
+                            .AddConstructor<ThreeGppIndoorOfficePropagationLossModel>()
+                            .AddAttribute("FactoryType",
+                                          "Type of 3GPP indoor factory model",
+                                          StringValue("InF-SL"),
+                                          MakeStringAccessor(&ThreeGppIndoorFactoryPropagationLossModel::m_factoryType),
+                                          MakeStringChecker());
+    return tid;
+}
+
+ThreeGppIndoorFactoryPropagationLossModel::ThreeGppIndoorFactoryPropagationLossModel()
+    : ThreeGppPropagationLossModel()
+{
+    NS_LOG_FUNCTION(this);
+
+    // set a default channel condition model
+    m_channelConditionModel = CreateObject<ThreeGppIndoorFactoryChannelConditionModel>();
+}
+
+ThreeGppIndoorFactoryPropagationLossModel::~ThreeGppIndoorFactoryPropagationLossModel()
+{
+    NS_LOG_FUNCTION(this);
+}
+
+double
+ThreeGppIndoorFactoryPropagationLossModel::GetO2iDistance2dIn() const
+{
+    return 0;
+}
+
+double
+ThreeGppIndoorFactoryPropagationLossModel::GetLossLos(Ptr<MobilityModel> a,
+                                                     Ptr<MobilityModel> b) const
+{
+    NS_LOG_FUNCTION(this);
+
+    double distance3D = CalculateDistance(a->GetPosition(), b->GetPosition());
+
+    // check if the distance is outside the validity range
+    if (distance3D < 1.0 || distance3D > 600.0)
+    {
+        NS_ABORT_MSG_IF(m_enforceRanges, "IndoorFactory 3D distance out of range");
+        NS_LOG_WARN("The 3D distance is outside the validity range, the pathloss value may not be "
+                    "accurate");
+    }
+
+    // compute the pathloss (see 3GPP TR 38.901, Table 7.4.1-1)
+    double loss = 31.84 + 21.5 * log10(distance3D) + 19.0 * log10(m_frequency / 1e9);
+
+    NS_LOG_DEBUG("Loss " << loss);
+
+    return loss;
+}
+
+double
+ThreeGppIndoorFactoryPropagationLossModel::GetLossNlos(Ptr<MobilityModel> a,
+                                                      Ptr<MobilityModel> b) const
+{
+    NS_LOG_FUNCTION(this);
+
+    double distance3D = CalculateDistance(a->GetPosition(), b->GetPosition());
+
+    // check if the distance is outside the validity range
+    if (distance3D < 1.0 || distance3D > 600.0)
+    {
+        NS_ABORT_MSG_IF(m_enforceRanges, "IndoorFactory 3D distance out of range");
+        NS_LOG_WARN("The 3D distance is outside the validity range, the pathloss value may not be "
+                    "accurate");
+    }
+
+    // compute the pathloss
+    double plNlos;
+    
+    if(m_factoryType == "InF-SL")
+    {
+        plNlos = 33 + 25.5 * log10(distance3D) + 20.0 * log10(m_frequency / 1e9);
+    }
+    else if(m_factoryType == "InF-DL")
+    {
+        plNlos = 18.6 + 35.7 * log10(distance3D) + 20.0 * log10(m_frequency / 1e9);
+    }
+    else if(m_factoryType == "InF-SH")
+    {
+        plNlos = 32.4 + 23 * log10(distance3D) + 20.0 * log10(m_frequency / 1e9);
+    }
+    else if(m_factoryType == "InF-DH")
+    {
+        plNlos = 33.63 + 21.9 * log10(distance3D) + 20.0 * log10(m_frequency / 1e9);
+    }
+    else
+    {
+        NS_ABORT_MSG("IndoorFactory model type is invalid");
+    }
+
+    double loss = std::max(GetLossLos(a, b), plNlos);
+
+    NS_LOG_DEBUG("Loss " << loss);
+
+    return loss;
+}
+
+double
+ThreeGppIndoorFactoryPropagationLossModel::GetShadowingStd(
+    Ptr<MobilityModel> /* a */,
+    Ptr<MobilityModel> /* b */,
+    ChannelCondition::LosConditionValue cond) const
+{
+    NS_LOG_FUNCTION(this);
+    double shadowingStd;
+
+    if (cond == ChannelCondition::LosConditionValue::LOS)
+    {
+        shadowingStd = 4.0;
+    }
+    else if (cond == ChannelCondition::LosConditionValue::NLOS)
+    {
+        if(m_factoryType == "InF-SL")
+        {
+            shadowingStd = 5.7;
+        }
+        else if(m_factoryType == "InF-DL")
+        {
+            shadowingStd = 7.2;
+        }
+        else if(m_factoryType == "InF-SH")
+        {
+            shadowingStd = 5.9;
+        }
+        else if(m_factoryType == "InF-DH")
+        {
+            shadowingStd = 4.0;
+        }
+    }
+    else
+    {
+        NS_FATAL_ERROR("Unknown channel condition");
+    }
+
+    return shadowingStd;
+}
+
+double
+ThreeGppIndoorFactoryPropagationLossModel::GetShadowingCorrelationDistance(
+    ChannelCondition::LosConditionValue cond) const
+{
+    NS_LOG_FUNCTION(this);
+
+    // See 3GPP TR 38.901, Table 7.5-6
+    double correlationDistance;
+
+    if (cond == ChannelCondition::LosConditionValue::LOS)
+    {
+        correlationDistance = 10;
+    }
+    else if (cond == ChannelCondition::LosConditionValue::NLOS)
+    {
+        correlationDistance = 10;
     }
     else
     {

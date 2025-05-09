@@ -9,12 +9,16 @@ build_lib(
     model/building.cc
     model/buildings-channel-condition-model.cc
     model/buildings-propagation-loss-model.cc
+    model/factory.cc
     model/hybrid-buildings-propagation-loss-model.cc
+    model/indoor-buildings-propagation-loss-model.cc
     model/itu-r-1238-propagation-loss-model.cc
     model/mobility-building-info.cc
     model/oh-buildings-propagation-loss-model.cc
+    model/random-walk-2d-indoor-mobility-model.cc
     model/random-walk-2d-outdoor-mobility-model.cc
     model/three-gpp-v2v-channel-condition-model.cc
+    model/wall.cc
   HEADER_FILES
     helper/building-allocator.h
     helper/building-container.h
@@ -24,12 +28,16 @@ build_lib(
     model/building.h
     model/buildings-channel-condition-model.h
     model/buildings-propagation-loss-model.h
+    model/factory.h
     model/hybrid-buildings-propagation-loss-model.h
+    model/indoor-buildings-propagation-loss-model.h
     model/itu-r-1238-propagation-loss-model.h
     model/mobility-building-info.h
     model/oh-buildings-propagation-loss-model.h
+    model/random-walk-2d-indoor-mobility-model.h
     model/random-walk-2d-outdoor-mobility-model.h
     model/three-gpp-v2v-channel-condition-model.h
+    model/wall.h
   LIBRARIES_TO_LINK ${libpropagation}
   TEST_SOURCES
     test/buildings-channel-condition-model-test.cc

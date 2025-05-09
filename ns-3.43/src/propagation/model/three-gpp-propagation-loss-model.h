@@ -75,6 +75,15 @@ class ThreeGppPropagationLossModel : public PropagationLossModel
      */
     bool IsO2iLowPenetrationLoss(Ptr<const ChannelCondition> cond) const;
 
+    /**
+     * \brief Computes the pathloss between a and b
+     * \param cond the channel condition
+     * \param a tx mobility model
+     * \param b rx mobility model
+     * \return pathloss value in dB
+     */
+    double GetLoss(Ptr<ChannelCondition> cond, Ptr<MobilityModel> a, Ptr<MobilityModel> b) const;
+
   private:
     /**
      * Computes the received power by applying the pathloss model described in
@@ -90,15 +99,6 @@ class ThreeGppPropagationLossModel : public PropagationLossModel
                          Ptr<MobilityModel> b) const override;
 
     int64_t DoAssignStreams(int64_t stream) override;
-
-    /**
-     * \brief Computes the pathloss between a and b
-     * \param cond the channel condition
-     * \param a tx mobility model
-     * \param b rx mobility model
-     * \return pathloss value in dB
-     */
-    double GetLoss(Ptr<ChannelCondition> cond, Ptr<MobilityModel> a, Ptr<MobilityModel> b) const;
 
     /**
      * \brief Computes the pathloss between a and b considering that the line of
@@ -681,6 +681,98 @@ class ThreeGppIndoorOfficePropagationLossModel : public ThreeGppPropagationLossM
      * \return shadowing correlation distance in meters
      */
     double GetShadowingCorrelationDistance(ChannelCondition::LosConditionValue cond) const override;
+};
+
+/**
+ * \ingroup propagation
+ *
+ * \brief Implements the pathloss model defined in 3GPP TR 38.901, Table 7.4.1-1
+ *        for the Indoor Factory with low clutter density scenario.
+ */
+class ThreeGppIndoorFactoryPropagationLossModel : public ThreeGppPropagationLossModel
+{
+  public:
+    /**
+     * \brief Get the type ID.
+     * \return the object TypeId
+     */
+    static TypeId GetTypeId();
+
+    /**
+     * Constructor
+     */
+    ThreeGppIndoorFactoryPropagationLossModel();
+
+    /**
+     * Destructor
+     */
+    ~ThreeGppIndoorFactoryPropagationLossModel() override;
+
+    // Delete copy constructor and assignment operator to avoid misuse
+    ThreeGppIndoorFactoryPropagationLossModel(const ThreeGppIndoorFactoryPropagationLossModel&) =
+        delete;
+        ThreeGppIndoorFactoryPropagationLossModel& operator=(
+        const ThreeGppIndoorFactoryPropagationLossModel&) = delete;
+
+  private:
+    /**
+     * \brief Computes the pathloss between a and b considering that the line of
+     *        sight is not obstructed
+     * \param a tx mobility model
+     * \param b rx mobility model
+     * \return pathloss value in dB
+     */
+    double GetLossLos(Ptr<MobilityModel> a, Ptr<MobilityModel> b) const override;
+
+    /**
+     * \brief Returns the minimum of the two independently generated distances
+     *        according to the uniform distribution between the minimum and the maximum
+     *        value depending on the specific 3GPP scenario (UMa, UMi-Street Canyon, RMa),
+     *        i.e., between 0 and 25 m for UMa and UMi-Street Canyon, and between 0 and 10 m
+     *        for RMa.
+     *        According to 3GPP TR 38.901 this 2D−in distance shall be UT-specifically
+     *        generated. 2D−in distance is used for the O2I penetration losses
+     *        calculation according to 3GPP TR 38.901 7.4.3.
+     *        See GetO2iLowPenetrationLoss/GetO2iHighPenetrationLoss functions.
+     * \return Returns 02i 2D distance (in meters) used to calculate low/high losses.
+     */
+    double GetO2iDistance2dIn() const override;
+
+    /**
+     * \brief Computes the pathloss between a and b considering that the line of
+     *        sight is obstructed
+     * \param a tx mobility model
+     * \param b rx mobility model
+     * \return pathloss value in dB
+     */
+    double GetLossNlos(Ptr<MobilityModel> a, Ptr<MobilityModel> b) const override;
+
+    /**
+     * \brief Returns the shadow fading standard deviation
+     * \param a tx mobility model
+     * \param b rx mobility model
+     * \param cond the LOS/NLOS channel condition
+     * \return shadowing std in dB
+     */
+    double GetShadowingStd(Ptr<MobilityModel> a,
+                           Ptr<MobilityModel> b,
+                           ChannelCondition::LosConditionValue cond) const override;
+
+    /**
+     * \brief Returns the shadow fading correlation distance
+     * \param cond the LOS/NLOS channel condition
+     * \return shadowing correlation distance in meters
+     */
+    double GetShadowingCorrelationDistance(ChannelCondition::LosConditionValue cond) const override;
+
+    std::string GetFactoryType() const;
+
+    void SetFactoryType(std::string factoryType);
+
+  protected:
+    
+    std::string m_factoryType;
+    
 };
 
 /**

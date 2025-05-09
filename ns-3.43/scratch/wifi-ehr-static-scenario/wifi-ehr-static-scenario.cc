@@ -818,8 +818,8 @@ main(int argc, char* argv[])
     // General parameters
     std::string layoutDir = "./scratch/wifi-ehr-static-scenario/";
     std::string outputDir = "./scratch/wifi-ehr-static-scenario/";
-    Time simulationTime{"2s"};
-    uint16_t numBss = 1;
+    Time simulationTime{"3s"};
+    uint16_t numBss = 4;
     std::vector<uint16_t> numApsPerBss = {3, 3, 3, 3}; 
     uint32_t seed = 50;
 

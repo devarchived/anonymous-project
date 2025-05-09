@@ -788,6 +788,50 @@ class ThreeGppIndoorOpenOfficeChannelConditionModel : public ThreeGppChannelCond
 /**
  * \ingroup propagation
  *
+ * \brief Computes the channel condition for the Indoor Factory scenario
+ *
+ * Computes the channel condition following the specifications for the
+ * Indoor Factory scenario reported in Table 7.4.2-1 of 3GPP TR 38.901
+ */
+class ThreeGppIndoorFactoryChannelConditionModel : public ThreeGppChannelConditionModel
+{
+  public:
+    /**
+     * Get the type ID.
+     * \brief Get the type ID.
+     * \return the object TypeId
+     */
+    static TypeId GetTypeId();
+
+    /**
+     * Constructor for the ThreeGppIndoorFactoryChannelConditionModel class
+     */
+    ThreeGppIndoorFactoryChannelConditionModel();
+
+    /**
+     * Destructor for the ThreeGppIndoorFactoryChannelConditionModel class
+     */
+    ~ThreeGppIndoorFactoryChannelConditionModel() override;
+
+  private:
+    /**
+     * Compute the LOS probability as specified in Table 7.4.2-1 of 3GPP TR 38.901
+     * for the Indoor Open Office scenario.
+     *
+     * \param a tx mobility model
+     * \param b rx mobility model
+     * \return the LOS probability
+     */
+    double ComputePlos(Ptr<const MobilityModel> a, Ptr<const MobilityModel> b) const override;
+
+  protected:
+    
+    std::string m_factoryType;
+};
+
+/**
+ * \ingroup propagation
+ *
  * \brief Computes the channel condition for the NTN Dense Urban Scenario
  *
  * Computes the channel condition following the specifications for the
