@@ -60,19 +60,34 @@ Factory::SetIntWallsType(Building::ExtWallsType_t t)
     m_interiorWallType = t;
 }
 
+void 
+Factory::AddIntWall(Ptr<Wall> wall)
+{
+    NS_LOG_FUNCTION(this << wall);
+
+    auto it = std::find(m_interiorWalls.begin(), m_interiorWalls.end(), wall);
+    if (it == m_interiorWalls.end())
+    {
+        // Add the wall only if it does not already exist
+        m_interiorWalls.push_back(wall);
+        NS_LOG_LOGIC("Wall added to m_interiorWalls: " << wall->GetBoundaries());
+    }
+    else
+    {
+        NS_LOG_LOGIC("Wall already exists in m_interiorWalls: " << wall->GetBoundaries());
+    }
+}
+
 void
-Factory::AddWallToRoom(uint16_t roomX, uint16_t roomY, const Wall& wall)
+Factory::AddWallToRoom(uint16_t roomX, uint16_t roomY, Ptr<Wall> wall)
 {
     std::pair<uint16_t, uint16_t> roomKey = std::make_pair(roomX, roomY);
 
-    // Create a Ptr<Wall> from the Wall object
-    Ptr<Wall> wallPtr = CreateObject<Wall>();
-    wallPtr->SetBoundaries(wall.GetBoundaries());
-
-    m_roomWalls[roomKey].push_back(wallPtr);
+    AddIntWall(wall);
+    m_roomWalls[roomKey].push_back(wall);
 
     NS_LOG_LOGIC("Added wall to room (" << roomX << ", " << roomY << ")"
-                 << " with boundaries: " << wall.GetBoundaries());
+                 << " with boundaries: " << wall->GetBoundaries());
 }
 
 uint16_t

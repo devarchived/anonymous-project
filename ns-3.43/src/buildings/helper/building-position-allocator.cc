@@ -218,6 +218,127 @@ OutdoorPositionAllocator::AssignStreams(int64_t stream)
     return 3;
 }
 
+NS_OBJECT_ENSURE_REGISTERED(IndoorPositionAllocator);
+
+IndoorPositionAllocator::IndoorPositionAllocator()
+{
+}
+
+TypeId
+IndoorPositionAllocator::GetTypeId()
+{
+    static TypeId tid =
+        TypeId("ns3::IndoorPositionAllocator")
+            .SetParent<PositionAllocator>()
+            .SetGroupName("Buildings")
+            .AddConstructor<IndoorPositionAllocator>()
+            .AddAttribute("X",
+                          "A random variable which represents the x coordinate of a position in a "
+                          "random box.",
+                          StringValue("ns3::UniformRandomVariable[Min=0.0|Max=1.0]"),
+                          MakePointerAccessor(&IndoorPositionAllocator::m_x),
+                          MakePointerChecker<RandomVariableStream>())
+            .AddAttribute("Y",
+                          "A random variable which represents the y coordinate of a position in a "
+                          "random box.",
+                          StringValue("ns3::UniformRandomVariable[Min=0.0|Max=1.0]"),
+                          MakePointerAccessor(&IndoorPositionAllocator::m_y),
+                          MakePointerChecker<RandomVariableStream>())
+            .AddAttribute("Z",
+                          "A random variable which represents the z coordinate of a position in a "
+                          "random box.",
+                          StringValue("ns3::UniformRandomVariable[Min=0.0|Max=1.0]"),
+                          MakePointerAccessor(&IndoorPositionAllocator::m_z),
+                          MakePointerChecker<RandomVariableStream>())
+            .AddAttribute("MaxAttempts",
+                          "Maximum number of attempts for the rejection sampling before giving up.",
+                          UintegerValue(1000),
+                          MakeUintegerAccessor(&IndoorPositionAllocator::m_maxAttempts),
+                          MakeUintegerChecker<uint32_t>());
+
+    return tid;
+}
+
+void
+IndoorPositionAllocator::SetX(Ptr<RandomVariableStream> x)
+{
+    m_x = x;
+}
+
+void
+IndoorPositionAllocator::SetY(Ptr<RandomVariableStream> y)
+{
+    m_y = y;
+}
+
+void
+IndoorPositionAllocator::SetZ(Ptr<RandomVariableStream> z)
+{
+    m_z = z;
+}
+
+Vector
+IndoorPositionAllocator::GetNext() const
+{
+    NS_ABORT_MSG_IF(BuildingList::GetNBuildings() == 0, "no building found");
+
+    bool indoor = false;
+    uint32_t attempts = 0;
+    Vector position = Vector(0, 0, 0);
+
+    while (!indoor && attempts < m_maxAttempts)
+    {
+        // get a random position
+        double x = m_x->GetValue();
+        double y = m_y->GetValue();
+        double z = m_z->GetValue();
+
+        position = Vector(x, y, z);
+
+        NS_LOG_INFO("Position " << position);
+
+        bool outside = false;
+        for (auto bit = BuildingList::Begin(); bit != BuildingList::End(); ++bit)
+        {
+            if (!(*bit)->IsInside(position))
+            {
+                NS_LOG_INFO("Position "
+                            << position << " is inside the building with boundaries "
+                            << (*bit)->GetBoundaries().xMin << " " << (*bit)->GetBoundaries().xMax
+                            << " " << (*bit)->GetBoundaries().yMin << " "
+                            << (*bit)->GetBoundaries().yMax << " " << (*bit)->GetBoundaries().zMin
+                            << " " << (*bit)->GetBoundaries().zMax);
+                outside = true;
+                break;
+            }
+        }
+
+        if (outside)
+        {
+            NS_LOG_INFO("Outside a building, attempt " << attempts << " out of " << m_maxAttempts);
+            attempts++;
+        }
+        else
+        {
+            NS_LOG_INFO("Indoor position found " << position);
+            indoor = true;
+        }
+    }
+
+    NS_ABORT_MSG_IF(attempts >= m_maxAttempts, "Too many attempts, give up");
+    NS_ABORT_MSG_IF(!indoor, "Still outdoor, give up");
+    return position;
+}
+
+int64_t
+IndoorPositionAllocator::AssignStreams(int64_t stream)
+{
+    m_x->SetStream(stream);
+    m_y->SetStream(stream + 1);
+    m_z->SetStream(stream + 2);
+    return 3;
+}
+
 NS_OBJECT_ENSURE_REGISTERED(RandomRoomPositionAllocator);
 
 RandomRoomPositionAllocator::RandomRoomPositionAllocator()

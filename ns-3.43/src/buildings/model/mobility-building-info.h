@@ -124,6 +124,8 @@ class MobilityBuildingInfo : public Object
      * \param mm the mobility model to be made consistent
      */
     void MakeConsistent(Ptr<MobilityModel> mm);
+    
+    Vector GetCachedPosition() const;
 
   protected:
     // inherited from Object

@@ -68,6 +68,9 @@ class RandomWalk2dIndoorMobilityModel : public MobilityModel
      * \param intersectPosition The position at which the building is intersected
      */
     void AvoidWall(Time delayLeft, Vector intersectPosition);
+
+    void WallRebound(Time delayLeft, Ptr<Wall> wall);
+
     /**
      * Walk according to position and velocity, until distance is reached,
      * time is reached, or intersection with the bounding box, or wall

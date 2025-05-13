@@ -282,4 +282,11 @@ Building::IsIntersect(const Vector& l1, const Vector& l2) const
     return m_buildingBounds.IsIntersect(l1, l2);
 }
 
+uint16_t   
+Building::CountWallsBetweenPoints(Vector pointA, Vector pointB) const
+{
+    NS_LOG_FUNCTION(this << pointA << pointB);
+    return 0;
+}
+
 } // namespace ns3

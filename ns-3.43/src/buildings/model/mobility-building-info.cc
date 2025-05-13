@@ -183,4 +183,11 @@ MobilityBuildingInfo::MakeConsistent(Ptr<MobilityModel> mm)
     m_cachedPosition = pos;
 }
 
+Vector
+MobilityBuildingInfo::GetCachedPosition() const
+{
+    NS_LOG_FUNCTION(this);
+    return m_cachedPosition;
+}
+
 } // namespace ns3

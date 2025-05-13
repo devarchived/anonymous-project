@@ -778,6 +778,8 @@ double
 ThreeGppRmaPropagationLossModel::GetLossLos(Ptr<MobilityModel> a, Ptr<MobilityModel> b) const
 {
     NS_LOG_FUNCTION(this);
+
+    std::cout << "Emang masuk sini" << std::endl;
     NS_ASSERT_MSG(m_frequency <= 30.0e9,
                   "RMa scenario is valid for frequencies between 0.5 and 30 GHz.");
 

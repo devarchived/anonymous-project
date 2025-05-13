@@ -214,6 +214,8 @@ class Building : public Object
      */
     bool IsIntersect(const Vector& l1, const Vector& l2) const;
 
+    virtual uint16_t CountWallsBetweenPoints(Vector pointA, Vector pointB) const;
+
   private:
     Box m_buildingBounds; //!< Building boundaries
 

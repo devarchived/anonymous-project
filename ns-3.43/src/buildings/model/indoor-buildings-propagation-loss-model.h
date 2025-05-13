@@ -36,16 +36,27 @@ public:
      */
     double GetLoss(Ptr<MobilityModel> a, Ptr<MobilityModel> b) const override;
 
+    Building::BuildingType_t GetBuildingType() const;
+
     std::string GetFactoryType() const;
 
+    double GetFrequency() const;
+
+    void SetBuildingType(Building::BuildingType_t buildingType);
+
     void SetFactoryType(std::string factoryType);
+
+    void SetFrequency(double frequency);
 
     double InternalWallsLoss(Ptr<MobilityBuildingInfo> a, Ptr<MobilityBuildingInfo> b) const;
 
 protected:
-    std::string m_buildingType; //!< type of building (e.g., Factory, Office, etc.)
+    
+    Ptr<Building> m_building;
+    Building::BuildingType_t m_buildingType; //!< type of building (e.g., Factory, Office, etc.)
     std::string m_factoryType; //!< type of factory (e.g., InF-SL, InF-DL, etc.)
     Ptr<ThreeGppPropagationLossModel> m_lossModel; 
+    double m_frequency; //!< frequency in Hz
 
 };
 

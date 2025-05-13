@@ -77,9 +77,14 @@ RandomWalk2dIndoorMobilityModel::GetTypeId()
             .AddAttribute("MaxIterations",
                           "Maximum number of attempts to find an alternative next position"
                           "if the original one is inside a wall.",
-                          UintegerValue(100),
+                          UintegerValue(1000),
                           MakeUintegerAccessor(&RandomWalk2dIndoorMobilityModel::m_maxIter),
-                          MakeUintegerChecker<uint32_t>());
+                          MakeUintegerChecker<uint32_t>())
+            .AddAttribute("Factory",
+                          "Pointer to the factory object for indoor mobility.",
+                          PointerValue(),
+                          MakePointerAccessor(&RandomWalk2dIndoorMobilityModel::SetFactory),
+                          MakePointerChecker<Factory>());
     return tid;
 }
 
@@ -149,22 +154,26 @@ RandomWalk2dIndoorMobilityModel::DoWalk(Time delayLeft)
             nextPosition =
                 CalculateIntersectionFromOutside(position, nextPosition, intersectingWall->GetBoundaries());
 
-            double delaySecondsX = std::numeric_limits<double>::max();
-            double delaySecondsY = std::numeric_limits<double>::max();
-            if (velocity.x != 0)
-            {
-                delaySecondsX = std::abs((nextPosition.x - position.x) / velocity.x);
-            }
-            if (velocity.y != 0)
-            {
-                delaySecondsY = std::abs((nextPosition.y - position.y) / velocity.y);
-            }
-            Time delay = Seconds(std::min(delaySecondsX, delaySecondsY));
-            m_event = Simulator::Schedule(delay,
-                                          &RandomWalk2dIndoorMobilityModel::AvoidWall,
-                                          this,
-                                          delayLeft - delay,
-                                          nextPosition);
+            // double delaySecondsX = std::numeric_limits<double>::max();
+            // double delaySecondsY = std::numeric_limits<double>::max();
+            // if (velocity.x != 0)
+            // {
+            //     delaySecondsX = std::abs((nextPosition.x - position.x) / velocity.x);
+            // }
+            // if (velocity.y != 0)
+            // {
+            //     delaySecondsY = std::abs((nextPosition.y - position.y) / velocity.y);
+            // }
+            // Time delay = Seconds(std::min(delaySecondsX, delaySecondsY));
+            // m_event = Simulator::Schedule(delay,
+            //                               &RandomWalk2dIndoorMobilityModel::AvoidWall,
+            //                               this,
+            //                               delayLeft - delay,
+            //                               nextPosition);
+            m_event = Simulator::ScheduleNow(&RandomWalk2dIndoorMobilityModel::AvoidWall,
+                                            this,
+                                            delayLeft,
+                                            nextPosition);
         }
     }
     else
@@ -408,6 +417,28 @@ RandomWalk2dIndoorMobilityModel::AvoidWall(Time delayLeft, Vector intersectPosit
     {
         NS_LOG_INFO("The next position would be inside a wall, compute an alternative");
         iter++;
+        
+        // Check if we have reached a quarter of the maximum iterations
+        if (iter >= m_maxIter / 4)
+        {
+            NS_LOG_INFO("Reached a quarter of max iterations, invoking WallRebound.");
+            Vector position = m_helper.GetCurrentPosition();
+            auto wallIntersection = IsLineClearOfWalls(position, intersectPosition);
+            Ptr<Wall> intersectingWall = std::get<1>(wallIntersection);
+
+            if (intersectingWall != nullptr)
+            {
+                NS_LOG_INFO("Invoking WallRebound with the interctingWall");
+                WallRebound(delayLeft, intersectingWall);
+                return; // Exit the function after invoking WallRebound
+            }
+            else
+            {
+                NS_LOG_ERROR("No intersecting wall found, unable to perform WallRebound.");
+                break; // Exit the loop if no wall is found
+            }
+        }
+
         double speed = m_speed->GetValue();
         double direction = m_direction->GetValue();
         Vector velocityVector(std::cos(direction) * speed, std::sin(direction) * speed, 0.0);
@@ -420,7 +451,9 @@ RandomWalk2dIndoorMobilityModel::AvoidWall(Time delayLeft, Vector intersectPosit
         // check if this is inside the current wall
         auto wallIntersection = IsLineClearOfWalls(intersectPosition, nextPosition);
         bool isClear = std::get<0>(wallIntersection);
+        Ptr<Wall> intersectingWall = std::get<1>(wallIntersection);
 
+        
         if (!isClear)
         {
             NS_LOG_LOGIC("inside loop intersect " << intersectPosition << " nextPosition "
@@ -465,6 +498,8 @@ RandomWalk2dIndoorMobilityModel::AvoidWall(Time delayLeft, Vector intersectPosit
         // check if the path is clear
         auto wallIntersection = IsLineClearOfWalls(intersectPosition, nextPosition);
         bool isClear = std::get<0>(wallIntersection);
+        Ptr<Wall> intersectingWall = std::get<1>(wallIntersection);
+
         if (!isClear)
         {
             NS_LOG_LOGIC("The position is still inside after "
@@ -486,6 +521,215 @@ RandomWalk2dIndoorMobilityModel::AvoidWall(Time delayLeft, Vector intersectPosit
 
     m_helper.Unpause();
 
+    DoWalk(delayLeft);
+}
+
+// void
+// RandomWalk2dIndoorMobilityModel::DoWalk(Time delayLeft)
+// {
+//     if (delayLeft.IsNegative())
+//     {
+//         NS_LOG_INFO(this << " Ran out of time");
+//         return;
+//     }
+//     NS_LOG_FUNCTION(this << delayLeft.GetSeconds());
+
+//     Vector position = m_helper.GetCurrentPosition();
+//     Vector velocity = m_helper.GetVelocity();
+//     Vector nextPosition = position;
+//     nextPosition.x += velocity.x * delayLeft.GetSeconds();
+//     nextPosition.y += velocity.y * delayLeft.GetSeconds();
+//     m_event.Cancel();
+
+//     // check if the nextPosition is inside a wall, or if the line
+//     // from position to the next position intersects a wall
+//     auto indoorWall = IsLineClearOfWalls(position, nextPosition);
+//     bool isClear = std::get<0>(indoorWall);
+//     Ptr<Wall> intersectingWall = std::get<1>(indoorWall);
+
+//     if (m_bounds.IsInside(nextPosition))
+//     {
+//         // if (isClear)
+//         // {
+//         //     m_event = Simulator::Schedule(delayLeft,
+//         //                                   &RandomWalk2dIndoorMobilityModel::DoInitializePrivate,
+//         //                                   this);
+//         // }
+//         // else
+//         // {
+//         //     NS_LOG_LOGIC("NextPosition would lead into a wall");
+//         //     nextPosition =
+//         //         CalculateIntersectionFromOutside(position, nextPosition, intersectingWall->GetBoundaries());
+
+//         //     double delaySecondsX = std::numeric_limits<double>::max();
+//         //     double delaySecondsY = std::numeric_limits<double>::max();
+//         //     if (velocity.x != 0)
+//         //     {
+//         //         delaySecondsX = std::abs((nextPosition.x - position.x) / velocity.x);
+//         //     }
+//         //     if (velocity.y != 0)
+//         //     {
+//         //         delaySecondsY = std::abs((nextPosition.y - position.y) / velocity.y);
+//         //     }
+//         //     Time delay = Seconds(std::min(delaySecondsX, delaySecondsY));
+//         //     m_event = Simulator::Schedule(delay,
+//         //                                   &RandomWalk2dIndoorMobilityModel::AvoidWall,
+//         //                                   this,
+//         //                                   delayLeft - delay,
+//         //                                   nextPosition);
+//         // }
+//         m_event = Simulator::Schedule(delayLeft,
+//                                               &RandomWalk2dIndoorMobilityModel::DoInitializePrivate,
+//                                               this);
+//     }
+//     else
+//     {
+//         NS_LOG_LOGIC("Out of bounding box");
+//         nextPosition = m_bounds.CalculateIntersection(position, velocity);
+//         // check that this nextPosition is clear of walls
+//         auto wallIntersection = IsLineClearOfWalls(position, nextPosition);
+//         bool isClear = std::get<0>(wallIntersection);
+//         Ptr<Wall> intersectingWall = std::get<1>(wallIntersection);
+
+//         // if (isClear)
+//         // {
+//         //     double delaySeconds = std::numeric_limits<double>::max();
+//         //     if (velocity.x != 0)
+//         //     {
+//         //         delaySeconds =
+//         //             std::min(delaySeconds, std::abs((nextPosition.x - position.x) / velocity.x));
+//         //     }
+//         //     else if (velocity.y != 0)
+//         //     {
+//         //         delaySeconds =
+//         //             std::min(delaySeconds, std::abs((nextPosition.y - position.y) / velocity.y));
+//         //     }
+//         //     else
+//         //     {
+//         //         NS_ABORT_MSG("RandomWalk2dIndoorMobilityModel::DoWalk: unable to calculate the "
+//         //                      "rebound time "
+//         //                      "(the node is stationary).");
+//         //     }
+//         //     Time delay = Seconds(delaySeconds);
+//         //     m_event = Simulator::Schedule(delay,
+//         //                                   &RandomWalk2dIndoorMobilityModel::Rebound,
+//         //                                   this,
+//         //                                   delayLeft - delay);
+//         // }
+//         // else
+//         // {
+//         //     NS_LOG_LOGIC("NextPosition would lead into a wall");
+//         //     if (intersectingWall != nullptr)
+//         //     {
+//         //         nextPosition = CalculateIntersectionFromOutside(position, nextPosition, intersectingWall->GetBoundaries());
+//         //     }
+//         //     else
+//         //     {
+//         //         NS_LOG_ERROR("Intersecting wall is null.");
+//         //     }
+
+//         //     double delaySecondsX = std::numeric_limits<double>::max();
+//         //     double delaySecondsY = std::numeric_limits<double>::max();
+//         //     if (velocity.x != 0)
+//         //     {
+//         //         delaySecondsX =
+//         //             std::min(delaySecondsX, std::abs((nextPosition.x - position.x) / velocity.x));
+//         //     }
+//         //     if (velocity.y != 0)
+//         //     {
+//         //         delaySecondsY =
+//         //             std::min(delaySecondsY, std::abs((nextPosition.y - position.y) / velocity.y));
+//         //     }
+//         //     if (delaySecondsX == std::numeric_limits<double>::max() &&
+//         //         delaySecondsY == std::numeric_limits<double>::max())
+//         //     {
+//         //         NS_ABORT_MSG("RandomWalk2dIndoorMobilityModel::DoWalk: unable to calculate the "
+//         //                      "rebound time "
+//         //                      "(the node is stationary).");
+//         //     }
+
+//         //     Time delay = Seconds(std::min(delaySecondsX, delaySecondsY));
+//         //     m_event = Simulator::Schedule(delay,
+//         //                                   &RandomWalk2dIndoorMobilityModel::AvoidWall,
+//         //                                   this,
+//         //                                   delayLeft - delay,
+//         //                                   nextPosition);
+//         // }
+//         double delaySeconds = std::numeric_limits<double>::max();
+//         if (velocity.x != 0)
+//         {
+//             delaySeconds =
+//                 std::min(delaySeconds, std::abs((nextPosition.x - position.x) / velocity.x));
+//         }
+//         else if (velocity.y != 0)
+//         {
+//             delaySeconds =
+//                 std::min(delaySeconds, std::abs((nextPosition.y - position.y) / velocity.y));
+//         }
+//         else
+//         {
+//             NS_ABORT_MSG("RandomWalk2dIndoorMobilityModel::DoWalk: unable to calculate the "
+//                             "rebound time "
+//                             "(the node is stationary).");
+//         }
+//         Time delay = Seconds(delaySeconds);
+//         m_event = Simulator::Schedule(delay,
+//                                         &RandomWalk2dIndoorMobilityModel::Rebound,
+//                                         this,
+//                                         delayLeft - delay);
+//     }
+//     NS_LOG_LOGIC("Position " << position << " NextPosition " << nextPosition);
+
+//     // store the previous position
+//     m_prevPosition = position;
+//     NotifyCourseChange();
+// }
+
+void
+RandomWalk2dIndoorMobilityModel::WallRebound(Time delayLeft, Ptr<Wall> wall)
+{
+    NS_LOG_FUNCTION(this << delayLeft.GetSeconds());
+    m_helper.Update();
+    
+    Vector position = m_helper.GetCurrentPosition();
+    Vector velocity = m_helper.GetVelocity();
+    Box wallBoundaries = wall->GetBoundaries();
+    
+    // Determine which side of the wall was hit
+    Rectangle wallRect(wallBoundaries.xMin, wallBoundaries.xMax, 
+                      wallBoundaries.yMin, wallBoundaries.yMax);
+    Rectangle::Side hitSide = wallRect.GetClosestSideOrCorner(position);
+    
+    // Adjust velocity based on which wall side was hit
+    switch (hitSide)
+    {
+    case Rectangle::RIGHTSIDE:
+    case Rectangle::LEFTSIDE:
+        // Reverse x velocity for vertical walls
+        velocity.x = -velocity.x;
+        break;
+    case Rectangle::TOPSIDE:
+    case Rectangle::BOTTOMSIDE:
+        // Reverse y velocity for horizontal walls
+        velocity.y = -velocity.y;
+        break;
+    case Rectangle::TOPRIGHTCORNER:
+    case Rectangle::TOPLEFTCORNER:
+    case Rectangle::BOTTOMRIGHTCORNER:
+    case Rectangle::BOTTOMLEFTCORNER:
+        // For corners, reverse both components
+        velocity.x = -velocity.x;
+        velocity.y = -velocity.y;
+        break;
+    }
+    
+    // Add small random perturbation to avoid getting stuck
+    Ptr<UniformRandomVariable> rand = CreateObject<UniformRandomVariable>();
+    velocity.x += (rand->GetValue() - 0.5) * 0.1 * velocity.x;
+    velocity.y += (rand->GetValue() - 0.5) * 0.1 * velocity.y;
+    
+    m_helper.SetVelocity(velocity);
+    m_helper.Unpause();
     DoWalk(delayLeft);
 }
 

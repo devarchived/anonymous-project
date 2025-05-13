@@ -69,29 +69,29 @@ class Factory : public Building
      */
     void SetIntWallsType(Building::ExtWallsType_t t);
 
-    void AddIntWall(const Wall& wall);
+    void AddIntWall(Ptr<Wall> wall);
 
-    /**
-     * \param nfloors the number of floors in the building
-     *
-     * This method allows to set the number of floors in the building
-     * (default is 1)
-     */
-    void SetNFloors(uint16_t nfloors);
+    // /**
+    //  * \param nfloors the number of floors in the building
+    //  *
+    //  * This method allows to set the number of floors in the building
+    //  * (default is 1)
+    //  */
+    // void SetNFloors(uint16_t nfloors);
 
-    /**
-     * \param nroomx the number of rooms along the x axis
-     *
-     * This method allows to set the number of rooms along the x-axis
-     */
-    void SetNRoomsX(uint16_t nroomx);
+    // /**
+    //  * \param nroomx the number of rooms along the x axis
+    //  *
+    //  * This method allows to set the number of rooms along the x-axis
+    //  */
+    // void SetNRoomsX(uint16_t nroomx);
 
-    /**
-     * \param nroomy the number of floors in the building
-     *
-     * This method allows to set the number of rooms along the y-axis
-     */
-    void SetNRoomsY(uint16_t nroomy);
+    // /**
+    //  * \param nroomy the number of floors in the building
+    //  *
+    //  * This method allows to set the number of rooms along the y-axis
+    //  */
+    // void SetNRoomsY(uint16_t nroomy);
 
     /**
      * Get the type of interior walls
@@ -117,9 +117,9 @@ class Factory : public Building
      */
     uint16_t GetNRoomsY() const;
 
-    void AddWallToRoom(uint16_t roomX, uint16_t roomY, const Wall& wall);
+    void AddWallToRoom(uint16_t roomX, uint16_t roomY, Ptr<Wall> wall);
 
-    uint16_t CountWallsBetweenPoints(Vector pointA, Vector pointB) const;
+    virtual uint16_t CountWallsBetweenPoints(Vector pointA, Vector pointB) const override;
 
     /**
      *

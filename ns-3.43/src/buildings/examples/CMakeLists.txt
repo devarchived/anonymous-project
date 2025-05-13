@@ -19,3 +19,11 @@ build_lib_example(
   SOURCE_FILES outdoor-random-walk-example.cc
   LIBRARIES_TO_LINK ${libbuildings}
 )
+
+build_lib_example(
+  NAME indoor-random-walk-example
+  SOURCE_FILES indoor-random-walk-example.cc
+  LIBRARIES_TO_LINK 
+    ${libbuildings}
+    ${libmobility}
+)

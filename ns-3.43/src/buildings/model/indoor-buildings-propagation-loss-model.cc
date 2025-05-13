@@ -31,14 +31,6 @@ NS_OBJECT_ENSURE_REGISTERED(IndoorBuildingsPropagationLossModel);
 
 IndoorBuildingsPropagationLossModel::IndoorBuildingsPropagationLossModel()
 {
-    if (m_buildingType == "Factory")
-    {
-        m_lossModel = CreateObject<ThreeGppIndoorFactoryPropagationLossModel>();
-    }
-    else
-    {
-        m_lossModel = CreateObject<ThreeGppIndoorOfficePropagationLossModel>();
-    }
 }
 
 IndoorBuildingsPropagationLossModel::~IndoorBuildingsPropagationLossModel()
@@ -63,6 +55,22 @@ IndoorBuildingsPropagationLossModel::GetTypeId()
     return tid;
 }
 
+void
+IndoorBuildingsPropagationLossModel::SetBuildingType(Building::BuildingType_t t)
+{
+    NS_LOG_FUNCTION(this << t);
+    m_buildingType = t;
+
+    if (m_buildingType == Building::Factory)
+    {
+        m_lossModel = CreateObject<ThreeGppIndoorFactoryPropagationLossModel>();
+    }
+    else
+    {
+        m_lossModel = CreateObject<ThreeGppIndoorOfficePropagationLossModel>();
+    }
+}
+
 void 
 IndoorBuildingsPropagationLossModel::SetFactoryType(std::string factoryType)
 {
@@ -70,11 +78,33 @@ IndoorBuildingsPropagationLossModel::SetFactoryType(std::string factoryType)
     m_factoryType = factoryType;
 }
 
+void
+IndoorBuildingsPropagationLossModel::SetFrequency(double frequency)
+{
+    NS_LOG_FUNCTION(this << frequency);
+    m_frequency = frequency;
+    m_lossModel->SetAttribute("Frequency", DoubleValue(m_frequency));
+}
+
+Building::BuildingType_t
+IndoorBuildingsPropagationLossModel::GetBuildingType() const
+{
+    NS_LOG_FUNCTION(this);
+    return m_buildingType;
+}
+
 std::string
 IndoorBuildingsPropagationLossModel::GetFactoryType() const
 {
     NS_LOG_FUNCTION(this);
     return m_factoryType;
+}
+
+double
+IndoorBuildingsPropagationLossModel::GetFrequency() const
+{
+    NS_LOG_FUNCTION(this);
+    return m_frequency;
 }
 
 double
@@ -114,10 +144,20 @@ double
 IndoorBuildingsPropagationLossModel::InternalWallsLoss(Ptr<MobilityBuildingInfo> a,
                                                  Ptr<MobilityBuildingInfo> b) const
 {
-    // approximate the number of internal walls with the Manhattan distance in "rooms" units
-    double dx = std::abs(a->GetRoomNumberX() - b->GetRoomNumberX());
-    double dy = std::abs(a->GetRoomNumberY() - b->GetRoomNumberY());
-    return m_lossInternalWall * (dx + dy);
+    NS_LOG_FUNCTION(this << a << b);
+
+    if(m_buildingType != Building::Factory)
+    {
+        // approximate the number of internal walls with the Manhattan distance in "rooms" units
+        double dx = std::abs(a->GetRoomNumberX() - b->GetRoomNumberX());
+        double dy = std::abs(a->GetRoomNumberY() - b->GetRoomNumberY());
+        return m_lossInternalWall * (dx + dy);
+    }
+    else
+    {
+        auto wallCount = a->GetBuilding()->CountWallsBetweenPoints(a->GetCachedPosition(), b->GetCachedPosition());
+        return m_lossInternalWall * wallCount;
+    }   
 }
 
 } // namespace ns3

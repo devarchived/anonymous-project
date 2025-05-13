@@ -121,6 +121,54 @@ class OutdoorPositionAllocator : public PositionAllocator
     uint32_t m_maxAttempts; //!< maximum number of attempts before giving up
 };
 
+class IndoorPositionAllocator : public PositionAllocator
+{
+  public:
+    IndoorPositionAllocator();
+
+    /**
+     * \brief Get the type ID.
+     * \return The object TypeId.
+     */
+    static TypeId GetTypeId();
+
+    // inherited from PositionAllocator
+    Vector GetNext() const override;
+
+    /**
+     * \brief Set the random variable stream object that generates x-positions
+     * \param x pointer to a RandomVariableStream object
+     */
+    void SetX(Ptr<RandomVariableStream> x);
+    /**
+     * \brief Set the random variable stream object that generates y-positions
+     * \param y pointer to a RandomVariableStream object
+     */
+    void SetY(Ptr<RandomVariableStream> y);
+    /**
+     * \brief Set the random variable stream object that generates z-positions
+     * \param z pointer to a RandomVariableStream object
+     */
+    void SetZ(Ptr<RandomVariableStream> z);
+
+    /**
+     * Assign a fixed random variable stream number to the random variables
+     * used by this model.  Return the number of streams (possibly zero) that
+     * have been assigned.
+     *
+     * \param stream first stream index to use
+     * \return the number of stream indices assigned by this model
+     */
+    int64_t AssignStreams(int64_t stream) override;
+
+  private:
+    Ptr<RandomVariableStream> m_x; //!< pointer to x's random variable stream
+    Ptr<RandomVariableStream> m_y; //!< pointer to y's random variable stream
+    Ptr<RandomVariableStream> m_z; //!< pointer to z's random variable stream
+
+    uint32_t m_maxAttempts; //!< maximum number of attempts before giving up
+};
+
 /**
  * Allocate each position by randomly choosing a room from the list
  * of all buildings, and then randomly choosing a position inside the room.
