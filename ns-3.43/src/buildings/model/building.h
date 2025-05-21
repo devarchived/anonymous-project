@@ -16,6 +16,8 @@
 #include <ns3/simple-ref-count.h>
 #include <ns3/vector.h>
 
+#include "wall.h"
+
 namespace ns3
 {
 
@@ -215,6 +217,8 @@ class Building : public Object
     bool IsIntersect(const Vector& l1, const Vector& l2) const;
 
     virtual uint16_t CountWallsBetweenPoints(Vector pointA, Vector pointB) const;
+
+    virtual std::vector<Ptr<Wall>>&  GetIntWalls();
 
   private:
     Box m_buildingBounds; //!< Building boundaries

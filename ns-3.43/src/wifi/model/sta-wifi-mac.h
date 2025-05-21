@@ -225,6 +225,8 @@ class StaWifiMac : public WifiMac
 
     void ScanningTimeoutMultiAp(std::list<ApInfo> apList);
 
+    void ScanningTimeoutOnLink(uint8_t linkId, const std::optional<ApInfo>& bestAp);
+
     // void ScanningTimeoutMultiAp(const WifiAssocManager::SortedList& apList);
     /**
      * Return whether we are associated with an AP.
@@ -366,6 +368,21 @@ class StaWifiMac : public WifiMac
         REFUSED
     };
 
+    enum LinkState
+    {
+        LINK_ASSOCIATED,
+        LINK_SCANNING,
+        LINK_WAIT_ASSOC_RESP,
+        LINK_UNASSOCIATED
+    };
+
+    enum RoamingState
+    {
+        IDLE_ROAMING,
+        REQUEST_ROAMING,
+        DECLINE_ROAMING
+    };
+
   private:
     void DoCompleteConfig() override;
 
@@ -460,6 +477,9 @@ class StaWifiMac : public WifiMac
      *
      */
     void SendAssociationRequest(bool isReassoc);
+
+    void SendAssociationRequestOnLink(uint8_t linkId, bool isReassoc);
+
     /**
      * Try to ensure that we are associated with an AP by taking an appropriate action
      * depending on the current association status.
@@ -475,6 +495,8 @@ class StaWifiMac : public WifiMac
      * active probing flag.
      */
     void StartScanning();
+
+    void StartScanningOnLink(uint8_t linkId);
     /**
      * Return whether we are waiting for an association response from an AP.
      *
@@ -485,16 +507,24 @@ class StaWifiMac : public WifiMac
      * This method is called after we have not received a beacon from the AP on any link.
      */
     void MissedBeacons();
+
+    void MissedBeaconsOnLink(uint8_t linkId);
     /**
      * Restarts the beacon timer.
      *
      * \param delay the delay before the watchdog fires
      */
     void RestartBeaconWatchdog(Time delay);
+
+    void RestartBeaconWatchdogOnLink(uint8_t linkId, Time delay);
+
     /**
      * Set the state to unassociated and try to associate again.
      */
     void Disassociated();
+
+    void DisassociatedOnLink(uint8_t linkId);
+
     /**
      * Return an instance of SupportedRates that contains all rates that we support
      * including HT rates.
@@ -526,6 +556,10 @@ class StaWifiMac : public WifiMac
      * \param value the new state
      */
     void SetState(MacState value);
+
+    void SetLinkState(uint8_t linkId, LinkState value);
+
+    void SetRoamingState(uint8_t linkId, RoamingState value);
 
     /**
      * EDCA Parameters
@@ -627,6 +661,12 @@ class StaWifiMac : public WifiMac
 
     bool m_enableMultiApCoordination{false};
     bool m_reliabilityMode {false};
+
+    std::map<uint8_t, LinkState> m_linkStateMap;
+    std::map<uint8_t, EventId> m_beaconWatchdogLinkMap;
+    std::map<uint8_t, Time> m_beaconWatchdogEndMap;
+    std::map<uint8_t, bool> m_roamingStateMap;
+    std::map<uint8_t, EventId> m_roamingStateResetLinkMap;
     
 };
 

@@ -92,6 +92,8 @@ class WifiAssocManager : public Object
      */
     void StartScanning(WifiScanParams&& scanParams);
 
+    void StartScanningOnLink(uint8_t linkId, WifiScanParams&& scanParams);
+
     /**
      * STA wifi MAC received a Beacon frame or Probe Response frame while scanning
      * and notifies us the AP information contained in the received frame.
@@ -206,6 +208,8 @@ class WifiAssocManager : public Object
      */
     void ScanningTimeout();
 
+    void ScanningTimeoutOnLink(uint8_t linkId);
+
     /// typedef for an optional const reference to a ReducedNeighborReport object
     using OptRnrConstRef = std::optional<std::reference_wrapper<const ReducedNeighborReport>>;
     /// typedef for an optional const reference to a MultiLinkElement object
@@ -233,10 +237,14 @@ class WifiAssocManager : public Object
      */
     virtual void DoStartScanning() = 0;
 
+    virtual void DoStartScanningOnLink(uint8_t linkId) = 0;
+
     WifiScanParams m_scanParams; ///< scanning parameters
     SortedList m_apList;         ///< sorted list of candidate APs
     /// hash table to help locate ApInfo objects in the sorted list based on the BSSID
     std::unordered_map<Mac48Address, SortedList::const_iterator, WifiAddressHash> m_apListIt;
+
+    WifiScanParams m_scanParamsOnLink; ///< scanning parameters on a specific link
 };
 
 } // namespace ns3

@@ -155,6 +155,8 @@ MobilityBuildingInfo::GetBuilding()
 void
 MobilityBuildingInfo::MakeConsistent(Ptr<MobilityModel> mm)
 {
+    NS_LOG_FUNCTION(this << mm);
+
     bool found = false;
     Vector pos = mm->GetPosition();
     for (auto bit = BuildingList::Begin(); bit != BuildingList::End(); ++bit)

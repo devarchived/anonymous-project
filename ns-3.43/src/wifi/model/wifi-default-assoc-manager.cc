@@ -108,6 +108,35 @@ WifiDefaultAssocManager::DoStartScanning()
 }
 
 void
+WifiDefaultAssocManager::DoStartScanningOnLink(uint8_t linkId)
+{
+    NS_LOG_FUNCTION(this);
+
+    m_probeRequestEventMap[linkId].Cancel();
+    m_waitBeaconEventMap[linkId].Cancel();
+
+    if (GetScanParams().type == WifiScanType::ACTIVE)
+    {
+        Simulator::Schedule(GetScanParams().probeDelay,
+                                &StaWifiMac::SendProbeRequest,
+                                m_mac,
+                                linkId);
+        m_probeRequestEventMap[linkId] =
+            Simulator::Schedule(GetScanParams().probeDelay + GetScanParams().maxChannelTime,
+                                &WifiDefaultAssocManager::EndScanningOnLink,
+                                this, 
+                                linkId);
+    }
+    else
+    {
+        m_waitBeaconEventMap[linkId] = Simulator::Schedule(GetScanParams().maxChannelTime,
+                                                &WifiDefaultAssocManager::EndScanningOnLink,
+                                                this,
+                                                linkId);
+    }
+}
+
+void
 WifiDefaultAssocManager::EndScanning()
 {
     NS_LOG_FUNCTION(this);
@@ -271,6 +300,52 @@ WifiDefaultAssocManager::EndScanning()
     {
         // we are done
         ScanningTimeout();
+    }
+}
+
+void
+WifiDefaultAssocManager::EndScanningOnLink(uint8_t linkId)
+{
+    NS_LOG_FUNCTION(this);
+    OptMleConstRef mle;
+    OptRnrConstRef rnr;
+    std::list<WifiAssocManager::RnrLinkInfo> apList;
+
+    // If multi-link setup is not possible, just call ScanningTimeout() and return
+    if (!CanSetupMultiLink(mle, rnr) || (apList = GetAllAffiliatedAps(*rnr)).empty())
+    {   
+        NS_LOG_INFO ("Debug EndScanning() does not support multi-link");
+        if (GetSortedList().size() > 1 && m_mac->MultiApCoordinationEnabled())
+        {
+            NS_LOG_INFO("Size of the apList : " << GetSortedList().size());
+            
+            for (auto& ap : GetSortedList())
+            {
+                if (ap.m_linkId == linkId)
+                {
+                    auto& setupLinks = GetSetupLinks(ap);
+
+                    setupLinks.clear();
+
+                    if(ap.m_linkId != mle->get().GetLinkIdInfo())
+                    {
+                        setupLinks.emplace_back(StaWifiMac::ApInfo::SetupLinksInfo{ap.m_linkId,
+                                                                    ap.m_linkId,
+                                                                    ap.m_bssid});
+                        NS_LOG_INFO("Added to setup links (" << +ap.m_linkId << ", " << +ap.m_linkId << ", " << ap.m_bssid << ")");
+                    }
+                    else
+                    {
+                        setupLinks.emplace_back(StaWifiMac::ApInfo::SetupLinksInfo{ap.m_linkId,
+                                                                    mle->get().GetLinkIdInfo(),
+                                                                    ap.m_bssid});
+                        NS_LOG_INFO("Added to setup links (" << +ap.m_linkId << ", " << +mle->get().GetLinkIdInfo() << ", " << ap.m_bssid << ")");
+                    }
+                }
+            }  
+        }
+        ScanningTimeout();
+        return;
     }
 }
 

@@ -45,9 +45,11 @@ class WifiDefaultAssocManager : public WifiAssocManager
      * identifying the links to setup in case of 11be MLD devices.
      */
     void EndScanning();
+    void EndScanningOnLink(uint8_t linkId);
 
   private:
     void DoStartScanning() override;
+    void DoStartScanningOnLink(uint8_t linkId) override;
 
     /**
      * Take action upon the expiration of the timer set when requesting channel
@@ -70,6 +72,9 @@ class WifiDefaultAssocManager : public WifiAssocManager
     };
 
     std::vector<ChannelSwitchInfo> m_channelSwitchInfo; ///< per-link channel switch info
+
+    std::map<uint8_t, EventId> m_waitBeaconEventMap; ///< per-link wait beacon event
+    std::map<uint8_t, EventId> m_probeRequestEventMap; ///< per-link probe request event
 };
 
 } // namespace ns3

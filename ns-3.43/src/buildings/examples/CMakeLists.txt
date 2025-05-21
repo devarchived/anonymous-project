@@ -27,3 +27,11 @@ build_lib_example(
     ${libbuildings}
     ${libmobility}
 )
+
+build_lib_example(
+  NAME indoor-sequential-walk-example
+  SOURCE_FILES indoor-sequential-walk-example.cc
+  LIBRARIES_TO_LINK 
+    ${libbuildings}
+    ${libmobility}
+)

@@ -151,6 +151,15 @@ StaWifiMac::StaWifiMac()
     // Let the lower layers know that we are acting as a non-AP STA in
     // an infrastructure BSS.
     SetTypeOfStation(STA);
+
+    if(MultiApCoordinationEnabled())
+    {
+        for (uint8_t linkId = 0; linkId < GetNLinks(); linkId++)
+        {
+            SetLinkState(linkId, LINK_UNASSOCIATED);
+            SetRoamingState(linkId, IDLE_ROAMING);
+        }
+    }
 }
 
 void
@@ -627,12 +636,12 @@ StaWifiMac::SendAssociationRequest(bool isReassoc)
         }
         for (auto it = GetLinks().cbegin(); it != GetLinks().cend(); ++it)
         {
+            if (!(GetStaLink(it->second).sendAssocReq))
+            {
+                continue;
+            }
             uint8_t linkId = it->first;
             auto& link = GetLink(linkId);
-            // if (!link.bssid.has_value())
-            // {
-            //     continue;
-            // }
             NS_ABORT_MSG_IF(!link.bssid.has_value(),
                     "No BSSID set for the link on which the (Re)Association Request is to be sent");
 
@@ -803,12 +812,118 @@ StaWifiMac::SendAssociationRequest(bool isReassoc)
 }
 
 void
+StaWifiMac::SendAssociationRequestOnLink(uint8_t linkId, bool isReassoc)
+{
+    NS_LOG_FUNCTION(this << GetNLinks());
+
+    auto& link = GetLink(linkId);
+    NS_ABORT_MSG_IF(!link.bssid.has_value(),
+                    "No BSSID set for the link on which the (Re)Association Request is to be sent");
+
+    NS_LOG_FUNCTION(this << *link.bssid << isReassoc);
+    WifiMacHeader hdr;
+    hdr.SetType(isReassoc ? WIFI_MAC_MGT_REASSOCIATION_REQUEST : WIFI_MAC_MGT_ASSOCIATION_REQUEST);
+    hdr.SetAddr1(*link.bssid);
+    hdr.SetAddr2(link.feManager->GetAddress());
+    hdr.SetAddr3(*link.bssid);
+    hdr.SetDsNotFrom();
+    hdr.SetDsNotTo();
+    Ptr<Packet> packet = Create<Packet>();
+
+    auto frame = GetAssociationRequest(isReassoc, linkId);
+
+    // include a Multi-Link Element if this device has multiple links (independently
+    // of how many links will be setup) and the AP is a multi-link device;
+    // if the AP MLD  has indicated a support of TID-to-link mapping negotiation, also
+    // include the TID-to-link Mapping element(s)
+    // if (GetNLinks() > 1 &&
+    //     GetWifiRemoteStationManager(linkId)->GetMldAddress(*link.bssid).has_value())
+    if (GetWifiRemoteStationManager(linkId)->GetMldAddress(*link.bssid).has_value())
+    {
+        auto addMle = [&](auto&& frame) {
+            frame.template Get<MultiLinkElement>() = GetMultiLinkElement(isReassoc, linkId);
+        };
+        std::visit(addMle, frame);
+
+        WifiTidToLinkMappingNegSupport negSupport;
+        if (const auto& mldCapabilities =
+                GetWifiRemoteStationManager(linkId)->GetStationMldCapabilities(*link.bssid);
+            mldCapabilities && (negSupport = static_cast<WifiTidToLinkMappingNegSupport>(
+                                    mldCapabilities->get().tidToLinkMappingSupport)) >
+                                WifiTidToLinkMappingNegSupport::NOT_SUPPORTED)
+        {
+            auto addTlm = [&](auto&& frame) {
+                frame.template Get<TidToLinkMapping>() = GetTidToLinkMappingElements(negSupport);
+            };
+            std::visit(addTlm, frame);
+        }
+    }
+
+    if (!isReassoc)
+    {
+        packet->AddHeader(std::get<MgtAssocRequestHeader>(frame));
+    }
+    else
+    {
+        packet->AddHeader(std::get<MgtReassocRequestHeader>(frame));
+    }
+
+    if (!GetQosSupported())
+    {
+        GetTxop()->Queue(Create<WifiMpdu>(packet, hdr));
+    }
+    // "A QoS STA that transmits a Management frame determines access category used
+    // for medium access in transmission of the Management frame as follows
+    // (If dot11QMFActivated is false or not present)
+    // — If the Management frame is individually addressed to a non-QoS STA, category
+    //   AC_BE should be selected.
+    // — If category AC_BE was not selected by the previous step, category AC_VO
+    //   shall be selected." (Sec. 10.2.3.2 of 802.11-2020)
+    else if (!GetWifiRemoteStationManager(linkId)->GetQosSupported(*link.bssid))
+    {
+        GetBEQueue()->Queue(Create<WifiMpdu>(packet, hdr));
+    }
+    else
+    {
+        GetVOQueue()->Queue(Create<WifiMpdu>(packet, hdr));
+    }
+    
+
+    if (m_assocRequestEvent.IsPending())
+    {
+        m_assocRequestEvent.Cancel();
+    }
+    m_assocRequestEvent =
+        Simulator::Schedule(m_assocRequestTimeout, &StaWifiMac::AssocRequestTimeout, this);
+}
+
+void
 StaWifiMac::TryToEnsureAssociated()
 {
     NS_LOG_FUNCTION(this);
     switch (m_state)
     {
     case ASSOCIATED:
+        if (m_linkStateMap.size() < GetNLinks())
+        {
+            std::cout << "STA is associated but not all links are up, start scanning" << std::endl;
+            NS_LOG_INFO("STA is associated but not all links are up, start scanning");
+            for (uint8_t linkId = m_linkStateMap.size(); linkId < GetNLinks(); linkId++)
+            {
+                StartScanningOnLink(linkId);
+            }
+        }
+        else
+        {
+            NS_LOG_DEBUG("STA is associated and all links are up, check if all links are still associated");
+            for (const auto& [linkId, state] : m_linkStateMap)
+            {
+                if (state == LINK_UNASSOCIATED)
+                {
+                    StartScanningOnLink(linkId);
+                }
+            }
+        }
         return;
     case SCANNING:
         /* we have initiated active or passive scanning, continue to wait
@@ -868,6 +983,41 @@ StaWifiMac::StartScanning()
     }
 
     m_assocManager->StartScanning(std::move(scanParams));
+}
+
+void
+StaWifiMac::StartScanningOnLink(uint8_t linkId)
+{
+    NS_LOG_FUNCTION(this);
+    SetLinkState(linkId, LINK_SCANNING);
+    NS_ASSERT(m_assocManager);
+
+    WifiScanParams scanParams;
+    scanParams.ssid = GetSsid();
+    for (const auto& [id, link] : GetLinks())
+    {
+        if (id == linkId)
+        {
+            WifiScanParams::ChannelList channel{
+            (link->phy->HasFixedPhyBand()) ? WifiScanParams::Channel{0, link->phy->GetPhyBand()}
+                                           : WifiScanParams::Channel{0, WIFI_PHY_BAND_UNSPECIFIED}};
+
+            scanParams.channelList.push_back(channel);
+        }
+    }
+    if (m_activeProbing)
+    {
+        scanParams.type = WifiScanType::ACTIVE;
+        scanParams.probeDelay = MicroSeconds(m_probeDelay->GetValue());
+        scanParams.minChannelTime = scanParams.maxChannelTime = m_probeRequestTimeout;
+    }
+    else
+    {
+        scanParams.type = WifiScanType::PASSIVE;
+        scanParams.maxChannelTime = m_waitBeaconTimeout;
+    }
+
+    m_assocManager->StartScanningOnLink(linkId, std::move(scanParams));
 }
 
 void
@@ -1035,7 +1185,89 @@ StaWifiMac::ScanningTimeoutMultiAp(std::list<ApInfo> apList)
     RestartBeaconWatchdog(delay);
 
     SetState(WAIT_ASSOC_RESP);
+    for (uint8_t linkId = 0; linkId < GetNLinks(); linkId++)
+    {
+        SetLinkState(linkId, LINK_WAIT_ASSOC_RESP);
+    }
     SendAssociationRequest(false);
+}
+
+void
+StaWifiMac::ScanningTimeoutOnLink(uint8_t linkId, const std::optional<ApInfo>& bestAp)
+{
+    NS_LOG_FUNCTION(this);
+
+    if (!bestAp.has_value())
+    {
+        NS_LOG_DEBUG("Exhausted list of candidate AP; restart scanning");
+        StartScanningOnLink(linkId);
+        return;
+    }
+
+    NS_LOG_DEBUG("Attempting to associate with AP: " << *bestAp);
+    UpdateApInfo(bestAp->m_frame, bestAp->m_apAddr, bestAp->m_bssid, bestAp->m_linkId);
+    // reset info on links to setup
+    for (auto& [id, link] : GetLinks())
+    {
+        if (id == linkId)
+        {
+            auto& staLink = GetStaLink(link);
+            staLink.sendAssocReq = false;
+            staLink.bssid = std::nullopt;
+        }
+    }
+    // send Association Request on the link where the Beacon/Probe Response was received
+    GetLink(bestAp->m_linkId).sendAssocReq = true;
+    GetLink(bestAp->m_linkId).bssid = bestAp->m_bssid;
+
+    std::shared_ptr<CommonInfoBasicMle> mleCommonInfo;
+    // update info on links to setup (11be MLDs only)
+    const auto& mle =
+        std::visit([](auto&& frame) { return frame.template Get<MultiLinkElement>(); },
+                   bestAp->m_frame);
+    std::map<uint8_t, uint8_t> swapInfo;
+    for (const auto& [localLinkId, apLinkId, bssid] : bestAp->m_setupLinks)
+    {
+        NS_ASSERT_MSG(mle, "We get here only for ML setup");
+        NS_LOG_INFO("Setting up link (local ID=" << +localLinkId << ", AP ID=" << +apLinkId
+                                                  << ")");
+        NS_LOG_DEBUG("Setting up link (local ID=" << +localLinkId << ", AP ID=" << +apLinkId
+                                                  << ")");
+        // GetLink(localLinkId).bssid = bssid;
+        if (!mleCommonInfo)
+        {
+            mleCommonInfo = std::make_shared<CommonInfoBasicMle>(mle->GetCommonInfoBasic());
+        }
+        GetWifiRemoteStationManager(localLinkId)->AddStationMleCommonInfo(bssid, mleCommonInfo);
+        swapInfo.emplace(localLinkId, apLinkId);
+    }
+
+    if (!MultiApCoordinationEnabled())
+    {
+        SwapLinks(swapInfo);
+    }
+
+    // lambda to get beacon interval from Beacon or Probe Response
+    auto getBeaconInterval = [](auto&& frame) {
+        using T = std::decay_t<decltype(frame)>;
+        if constexpr (std::is_same_v<T, MgtBeaconHeader> ||
+                      std::is_same_v<T, MgtProbeResponseHeader>)
+        {
+            return MicroSeconds(frame.GetBeaconIntervalUs());
+        }
+        else
+        {
+            NS_ABORT_MSG("Unexpected frame type");
+            return Seconds(0);
+        }
+    };
+    Time beaconInterval = std::visit(getBeaconInterval, bestAp->m_frame);
+    Time delay = beaconInterval * m_maxMissedBeacons;
+    // restart beacon watchdog
+    RestartBeaconWatchdogOnLink(linkId, delay);
+
+    SetLinkState(linkId, LINK_WAIT_ASSOC_RESP);
+    SendAssociationRequestOnLink(linkId, false);
 }
 
 void
@@ -1079,6 +1311,44 @@ StaWifiMac::MissedBeacons()
 }
 
 void
+StaWifiMac::MissedBeaconsOnLink(uint8_t linkId)
+{
+    NS_LOG_FUNCTION(this << +linkId);
+
+    if (m_beaconWatchdogEndMap[linkId] > Simulator::Now())
+    {
+        if (m_beaconWatchdogLinkMap[linkId].IsPending())
+        {
+            m_beaconWatchdogLinkMap[linkId].Cancel();
+        }
+        m_beaconWatchdogLinkMap[linkId] = Simulator::Schedule(m_beaconWatchdogEndMap[linkId] - Simulator::Now(),
+                                               &StaWifiMac::MissedBeaconsOnLink,
+                                               this, linkId);
+        return;
+    }
+
+    NS_LOG_INFO("beacon missed on link " << +linkId);
+    NS_LOG_DEBUG("beacon missed on link " << +linkId);
+    // We need to switch the link to the UNASSOCIATED state. However, if we are receiving a frame, wait
+    // until the RX is completed (otherwise, crashes may occur if we are receiving a MU frame
+    // because its reception requires the STA-ID). We need to check that a PHY is operating on
+    // the given link, because this may (temporarily) not be the case for EMLSR clients.
+    Time delay = Seconds(0);
+    for (const auto& [id, link] : GetLinks())
+    {
+        if (id == linkId)
+        {
+            if (link->phy && link->phy->IsStateRx())
+            {
+                delay = std::max(delay, link->phy->GetDelayUntilIdle());
+            }
+            break;
+        }
+    }
+    Simulator::Schedule(delay, &StaWifiMac::DisassociatedOnLink, this, linkId);
+}
+
+void
 StaWifiMac::Disassociated()
 {
     NS_LOG_FUNCTION(this);
@@ -1105,6 +1375,35 @@ StaWifiMac::Disassociated()
 }
 
 void
+StaWifiMac::DisassociatedOnLink(uint8_t linkId)
+{
+    NS_LOG_FUNCTION(this);
+
+    Mac48Address apAddr; // the AP address to trace (MLD address in case of ML setup)
+
+    for (const auto& [id, link] : GetLinks())
+    {
+        if (id == linkId)
+        {
+            auto& bssid = GetStaLink(link).bssid;
+            if (bssid)
+            {
+                apAddr = GetWifiRemoteStationManager(id)->GetMldAddress(*bssid).value_or(*bssid);
+            }
+            bssid = std::nullopt; // link is no longer setup
+            break;
+        }
+    }
+
+    NS_LOG_INFO("Set link state to LINK_UNASSOCIATED and start scanning");
+    NS_LOG_DEBUG("Set link state to LINK_UNASSOCIATED and start scanning");
+    SetLinkState(linkId, LINK_UNASSOCIATED);
+
+    m_deAssocLogger(apAddr);
+    TryToEnsureAssociated();
+}
+
+void
 StaWifiMac::RestartBeaconWatchdog(Time delay)
 {
     NS_LOG_FUNCTION(this << delay);
@@ -1114,6 +1413,19 @@ StaWifiMac::RestartBeaconWatchdog(Time delay)
     {
         NS_LOG_DEBUG("really restart watchdog.");
         m_beaconWatchdog = Simulator::Schedule(delay, &StaWifiMac::MissedBeacons, this);
+    }
+}
+
+void
+StaWifiMac::RestartBeaconWatchdogOnLink(uint8_t linkId, Time delay)
+{
+    NS_LOG_FUNCTION(this << linkId << delay);
+
+    m_beaconWatchdogEndMap[linkId] = std::max(Simulator::Now() + delay, m_beaconWatchdogEndMap[linkId]);
+    if (Simulator::GetDelayLeft(m_beaconWatchdogLinkMap[linkId]) < delay && m_beaconWatchdogLinkMap[linkId].IsExpired())
+    {
+        NS_LOG_DEBUG("really restart watchdog.");
+        m_beaconWatchdogLinkMap[linkId] = Simulator::Schedule(delay, &StaWifiMac::MissedBeaconsOnLink, this, linkId);
     }
 }
 
@@ -1549,7 +1861,42 @@ StaWifiMac::ReceiveBeacon(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
         Time delay = MicroSeconds(std::get<MgtBeaconHeader>(apInfo.m_frame).GetBeaconIntervalUs() *
                                   m_maxMissedBeacons);
         RestartBeaconWatchdog(delay);
-        UpdateApInfo(apInfo.m_frame, hdr.GetAddr2(), hdr.GetAddr3(), linkId);
+        if(m_linkStateMap[linkId] == LINK_ASSOCIATED)
+        {
+            if ((m_roamingStateResetLinkMap.find(linkId) != m_roamingStateResetLinkMap.end()) || (m_roamingStateMap[linkId] != IDLE_ROAMING))
+            {
+                Time beaconInterval = MicroSeconds(std::get<MgtBeaconHeader>(apInfo.m_frame).GetBeaconIntervalUs());
+                m_roamingStateResetLinkMap[linkId] = Simulator::Schedule(beaconInterval, &StaWifiMac::SetRoamingState, this, linkId, IDLE_ROAMING);
+            }
+
+            if (hdr.GetAddr3() == GetBssid(linkId))
+            {
+                if (m_roamingStateMap[linkId] != REQUEST_ROAMING)
+                {
+                    RestartBeaconWatchdogOnLink(linkId, delay);
+                    m_roamingStateMap[linkId] = DECLINE_ROAMING;
+                }
+                NS_LOG_INFO("Beacon received from " << hdr.GetAddr3() << " for associated link " << +linkId);
+                NS_LOG_DEBUG("Beacon received from " << hdr.GetAddr3() << " for associated link " << +linkId);
+                UpdateApInfo(apInfo.m_frame, hdr.GetAddr2(), hdr.GetAddr3(), linkId);
+            }
+            else
+            {
+                if (m_roamingStateMap[linkId] != DECLINE_ROAMING)
+                {
+                    NS_LOG_INFO("Beacon received from better AP " << hdr.GetAddr3() << " for associated link " << +linkId);
+                    NS_LOG_DEBUG("Beacon received from better AP " << hdr.GetAddr3() << " for associated link " << +linkId);
+                    m_roamingStateMap[linkId] = REQUEST_ROAMING;
+                } 
+            }
+        }
+        else if (m_linkStateMap[linkId] == LINK_UNASSOCIATED)
+        {
+            NS_LOG_INFO("Beacon received from " << hdr.GetAddr3() << " for unassociated link " << +linkId);
+            NS_LOG_DEBUG("Beacon received from " << hdr.GetAddr3() << " for unassociated link " << +linkId);
+            TryToEnsureAssociated();
+            m_assocManager->NotifyApInfo(std::move(apInfo));
+        }
     }
     else
     {
@@ -1598,6 +1945,14 @@ StaWifiMac::ReceiveAssocResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
             return;
         }
     }
+    else 
+    {
+        if (m_linkStateMap[linkId] != LINK_WAIT_ASSOC_RESP)
+        {
+            NS_LOG_INFO("Link " << +linkId << " is not in WAIT_ASSOC_RESP state");
+            return;
+        }
+    }
 
     std::optional<Mac48Address> apMldAddress;
     MgtAssocResponseHeader assocResp;
@@ -1615,6 +1970,8 @@ StaWifiMac::ReceiveAssocResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
         NS_ASSERT(GetLink(linkId).bssid.has_value() && *GetLink(linkId).bssid == hdr.GetAddr3());
         SetBssid(hdr.GetAddr3(), linkId);
         SetState(ASSOCIATED);
+        SetLinkState(linkId, LINK_ASSOCIATED);
+
         if ((GetNLinks() > 1) && assocResp.Get<MultiLinkElement>().has_value())
         {
             // this is an ML setup, trace the setup link
@@ -1736,6 +2093,7 @@ StaWifiMac::ReceiveAssocResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
                     SetBssid(*bssid, staLinkid);
                     m_setupCompleted(staLinkid, *bssid);
                     SetState(ASSOCIATED);
+                    SetLinkState(staLinkid, LINK_ASSOCIATED);
                     apMldAddress = GetWifiRemoteStationManager(staLinkid)->GetMldAddress(*bssid);
                     if (!m_linkUp.IsNull())
                     {
@@ -2280,6 +2638,18 @@ void
 StaWifiMac::SetState(MacState value)
 {
     m_state = value;
+}
+
+void
+StaWifiMac::SetLinkState(uint8_t linkId, LinkState value)
+{
+    m_linkStateMap[linkId] = value;
+}
+
+void 
+StaWifiMac::SetRoamingState(uint8_t linkId, RoamingState value)
+{
+    m_roamingStateMap[linkId] = value;
 }
 
 void

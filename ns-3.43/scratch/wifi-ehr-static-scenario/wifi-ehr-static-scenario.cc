@@ -820,7 +820,7 @@ main(int argc, char* argv[])
     std::string outputDir = "./scratch/wifi-ehr-static-scenario/";
     Time simulationTime{"3s"};
     uint16_t numBss = 4;
-    std::vector<uint16_t> numApsPerBss = {3, 3, 3, 3}; 
+    std::vector<uint16_t> numApsPerBss = {2, 3, 3, 3}; 
     uint32_t seed = 50;
 
     // Wifi Simulation Parameters

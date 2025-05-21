@@ -34,9 +34,13 @@ bool
 WifiAssocManager::ApInfoCompare::operator()(const StaWifiMac::ApInfo& lhs,
                                             const StaWifiMac::ApInfo& rhs) const
 {
+    NS_LOG_FUNCTION(this << lhs.m_bssid << rhs.m_bssid);
+
     NS_ASSERT_MSG(lhs.m_bssid != rhs.m_bssid,
                   "Comparing two ApInfo objects with the same BSSID: " << lhs.m_bssid);
-
+    
+    std::cout << "Comparing " << lhs.m_bssid << " and " << rhs.m_bssid << std::endl;
+    
     bool lhsBefore = m_manager.Compare(lhs, rhs);
     if (lhsBefore)
     {
@@ -187,6 +191,39 @@ WifiAssocManager::StartScanning(WifiScanParams&& scanParams)
 }
 
 void
+WifiAssocManager::StartScanningOnLink(uint8_t linkId, WifiScanParams&& scanParams)
+{
+    NS_LOG_FUNCTION(this);
+
+    // remove stored AP information corresponding to the operating band of the given link
+    for (auto ap = m_apList.begin(); ap != m_apList.end();)
+    {
+        bool matchingBand = false;
+        for (const auto& channel : scanParams.channelList[0])
+        {
+            if (channel.band == ap->m_channel.band)
+            {
+                matchingBand = true;
+                break;
+            }
+        }
+
+        if (matchingBand)
+        {
+            // remove AP info from list
+            m_apListIt.erase(ap->m_bssid);
+            ap = m_apList.erase(ap);
+        }
+        else
+        {
+            ++ap;
+        }
+    }
+
+    DoStartScanningOnLink(linkId);
+}
+
+void
 WifiAssocManager::NotifyApInfo(const StaWifiMac::ApInfo&& apInfo)
 {
     NS_LOG_FUNCTION(this << apInfo);
@@ -238,6 +275,10 @@ WifiAssocManager::ScanningTimeout()
         std::list<StaWifiMac::ApInfo> apInfoList;
         for (auto ap = m_apList.begin(); ap != m_apList.end(); ++ap)
         {
+            if (apInfoList.size() >= m_mac->GetNLinks())
+            {
+                break;
+            }
             apInfoList.push_back(*ap);
         } 
         m_mac->ScanningTimeoutMultiAp(apInfoList);
@@ -257,6 +298,36 @@ WifiAssocManager::ScanningTimeout()
 
         m_mac->ScanningTimeout(std::move(bestAp));
     }
+}
+
+void
+WifiAssocManager::ScanningTimeoutOnLink(uint8_t linkId)
+{
+    NS_LOG_FUNCTION(this);
+
+    StaWifiMac::ApInfo bestAp;
+
+    if (m_apList.empty())
+    {
+        m_mac->ScanningTimeoutOnLink(linkId, std::nullopt);
+        return;
+    }
+    
+    NS_LOG_INFO("m_apListIt size : " << m_apListIt.size());
+
+    std::list<StaWifiMac::ApInfo> apInfoList;
+    for (auto ap = m_apList.begin(); ap != m_apList.end(); ++ap)
+    {
+        if (ap->m_linkId == linkId)
+        {
+            bestAp = std::move(m_apList.extract(ap).value());
+            m_apListIt.erase(bestAp.m_bssid);
+            m_mac->ScanningTimeoutOnLink(linkId, std::move(bestAp));
+            return;
+        }
+    } 
+    // No matching AP found
+    m_mac->ScanningTimeoutOnLink(linkId, std::nullopt);
 }
 
 std::list<StaWifiMac::ApInfo::SetupLinksInfo>&

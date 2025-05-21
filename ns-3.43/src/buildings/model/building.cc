@@ -289,4 +289,13 @@ Building::CountWallsBetweenPoints(Vector pointA, Vector pointB) const
     return 0;
 }
 
+std::vector<Ptr<Wall>>&
+Building::GetIntWalls()
+{
+    NS_LOG_FUNCTION(this);
+    
+    std::vector<Ptr<Wall>> emptyWalls;
+    return emptyWalls;
+}
+
 } // namespace ns3

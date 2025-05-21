@@ -100,7 +100,7 @@ class Factory : public Building
      */
     Building::ExtWallsType_t GetIntWallsType() const;
 
-    std::vector<Ptr<Wall>>&  GetIntWalls();
+    virtual std::vector<Ptr<Wall>>&  GetIntWalls() override;
 
     /**
      * \return the number of floors of the building

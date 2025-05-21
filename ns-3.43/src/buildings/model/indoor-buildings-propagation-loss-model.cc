@@ -149,9 +149,11 @@ IndoorBuildingsPropagationLossModel::InternalWallsLoss(Ptr<MobilityBuildingInfo>
     if(m_buildingType != Building::Factory)
     {
         // approximate the number of internal walls with the Manhattan distance in "rooms" units
-        double dx = std::abs(a->GetRoomNumberX() - b->GetRoomNumberX());
-        double dy = std::abs(a->GetRoomNumberY() - b->GetRoomNumberY());
-        return m_lossInternalWall * (dx + dy);
+        // double dx = std::abs(a->GetRoomNumberX() - b->GetRoomNumberX());
+        // double dy = std::abs(a->GetRoomNumberY() - b->GetRoomNumberY());
+        // return m_lossInternalWall * (dx + dy);
+        auto wallCount = a->GetBuilding()->CountWallsBetweenPoints(a->GetCachedPosition(), b->GetCachedPosition());
+        return m_lossInternalWall * wallCount;
     }
     else
     {
