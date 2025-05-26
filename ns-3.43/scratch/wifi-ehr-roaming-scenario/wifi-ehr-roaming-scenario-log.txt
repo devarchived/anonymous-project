@@ -1,0 +1,19 @@
+[0/2] Re-checking globbed directories...
+[1/2] Building CXX object src/wifi/CMakeFiles/wifi.dir/model/sta-wifi-mac.cc.o
+FAILED: src/wifi/CMakeFiles/wifi.dir/model/sta-wifi-mac.cc.o 
+/usr/bin/ccache /usr/bin/c++ -DEIGEN_MPL2_ONLY -DHAVE_BOOST -DHAVE_BOOST_UNITS -DHAVE_EIGEN3 -DNS3_ASSERT_ENABLE -DNS3_BUILD_PROFILE_DEBUG -DNS3_LOG_ENABLE -DPROJECT_SOURCE_PATH=\"/home/oliver/Desktop/Workspace/ns-allinone-3.43/ns-3.43\" -D__LINUX__ -Dwifi_EXPORTS -I/home/oliver/Desktop/Workspace/ns-allinone-3.43/ns-3.43/build/include -I/usr/include/eigen3 -Os -g -DNDEBUG -fPIC   -fno-semantic-interposition -fdiagnostics-color=always -Wall -Wpedantic -std=c++20 -Winvalid-pch -include /home/oliver/Desktop/Workspace/ns-allinone-3.43/ns-3.43/cmake-cache/CMakeFiles/stdlib_pch-default.dir/cmake_pch.hxx -MD -MT src/wifi/CMakeFiles/wifi.dir/model/sta-wifi-mac.cc.o -MF src/wifi/CMakeFiles/wifi.dir/model/sta-wifi-mac.cc.o.d -o src/wifi/CMakeFiles/wifi.dir/model/sta-wifi-mac.cc.o -c /home/oliver/Desktop/Workspace/ns-allinone-3.43/ns-3.43/src/wifi/model/sta-wifi-mac.cc
+/home/oliver/Desktop/Workspace/ns-allinone-3.43/ns-3.43/src/wifi/model/sta-wifi-mac.cc: In member function ‘void ns3::StaWifiMac::RestartBeaconWatchdog(ns3::Time)’:
+/home/oliver/Desktop/Workspace/ns-allinone-3.43/ns-3.43/src/wifi/model/sta-wifi-mac.cc:1451:34: error: could not convert ‘((ns3::StaWifiMac*)this)->ns3::StaWifiMac::EnableMultiApCoordination()’ from ‘void’ to ‘bool’
+ 1451 |     if(!EnableMultiApCoordination())
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~^~
+      |                                  |
+      |                                  void
+/home/oliver/Desktop/Workspace/ns-allinone-3.43/ns-3.43/src/wifi/model/sta-wifi-mac.cc:1451:34: error: in argument to unary !
+/home/oliver/Desktop/Workspace/ns-allinone-3.43/ns-3.43/src/wifi/model/sta-wifi-mac.cc: In member function ‘virtual void ns3::StaWifiMac::Receive(ns3::Ptr<const ns3::WifiMpdu>, uint8_t)’:
+/home/oliver/Desktop/Workspace/ns-allinone-3.43/ns-3.43/src/wifi/model/sta-wifi-mac.cc:1711:55: warning: comparison of integer expressions of different signedness: ‘uint32_t’ {aka ‘unsigned int’} and ‘int’ [-Wsign-compare]
+ 1711 |                 else if((GetNLinks() > 1) && (rxCount < GetNLinks() - 1))
+      |                                               ~~~~~~~~^~~~~~~~~~~~~~~~~
+/home/oliver/Desktop/Workspace/ns-allinone-3.43/ns-3.43/src/wifi/model/sta-wifi-mac.cc:1774:55: warning: comparison of integer expressions of different signedness: ‘uint32_t’ {aka ‘unsigned int’} and ‘int’ [-Wsign-compare]
+ 1774 |                 else if((GetNLinks() > 1) && (rxCount < GetNLinks() - 1))
+      |                                               ~~~~~~~~^~~~~~~~~~~~~~~~~
+ninja: build stopped: subcommand failed.
