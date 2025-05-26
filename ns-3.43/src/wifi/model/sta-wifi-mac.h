@@ -661,6 +661,8 @@ class StaWifiMac : public WifiMac
     /// TracedCallback signature for link setup completed/canceled events
     using LinkSetupCallback = void (*)(uint8_t /* link ID */, Mac48Address /* AP address */);
 
+    using AssocCallback = void (*)(Mac48Address/* STA address */, Mac48Address /* AP address */);
+
     bool m_enableMultiApCoordination{false};
     bool m_reliabilityMode {false};
 
@@ -672,6 +674,8 @@ class StaWifiMac : public WifiMac
     std::map<uint8_t, double> m_snrLinkMap;
     std::map<uint8_t, Time> m_beaconRemTimeMap;
 
+    TracedCallback<Mac48Address, Mac48Address> m_newAssocLogger; 
+    TracedCallback<Mac48Address, Mac48Address> m_newDeAssocLogger;
     TracedCallback<uint8_t, Mac48Address> m_assocLinkLogger; 
     TracedCallback<uint8_t, Mac48Address> m_deAssocLinkLogger; 
     

@@ -32,10 +32,11 @@
 #include <functional>
 #include <numeric>
 #include <random>
+#include <map>
 
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE("WifiEhtStaticScenario");
+NS_LOG_COMPONENT_DEFINE("WifiEhtRoamingScenario");
 
 bool 
 fileExists(const std::string& filename) 
@@ -44,8 +45,13 @@ fileExists(const std::string& filename)
     return file.good();
 }
 
-static bool g_verbose = false;
+bool findSubstring(const std::string& text, const std::string& substring) 
+{
+    return text.find(substring) != std::string::npos;
+}
 
+static bool g_verbose = false;
+ 
 bool m_reliabilityMode = false;
 std::map<Mac48Address,Mac48Address>  m_apStaAddressMap;
 NetDeviceContainer m_staDevices;
@@ -60,9 +66,12 @@ typedef struct Analysis
     std::map<uint64_t,Time> macRxMap;
     std::map<uint64_t,uint64_t> retransmitTxMap;
     std::map<std::pair<uint64_t, Mac48Address>, uint64_t> retransmitTxMapReliability;
-    std::map<uint64_t,Time> dropTxMap;
+    std::map<uint64_t,uint64_t> dropTxMap;
+    std::map<std::pair<uint64_t, Mac48Address>, uint64_t> dropTxMapReliability;
     std::map<uint64_t,Time> chReqTxMap;
+    std::map<std::pair<uint64_t, Mac48Address>, Time> chReqTxMapReliability;
     std::map<uint64_t,Time> chGrantedTxMap;
+    std::map<std::pair<uint64_t, Mac48Address>, Time> chGrantedTxMapReliability;
     uint64_t rxPackets{0};
     uint64_t txPackets{0};
     uint64_t phyRxPackets{0};
@@ -70,101 +79,17 @@ typedef struct Analysis
     uint64_t dropPackets{0};
     uint64_t retransmitPackets{0};
     uint64_t chAccessCount{0};
+    uint64_t assocCount{0};
+    uint64_t deAssocCount{0};
     Time sumDelay{"0s"};
     Time avgDelay{"0s"};
     Time sumChAccessDelay{"0s"};
     Time avgChAccessDelay{"0s"};
+    Time sumAssocTime{"0s"};
+    Time sumDeAssocTime{"0s"};
 } Analysis;
-
+ 
 std::map<Mac48Address,Analysis> analysisMap;
-
-Ptr<ListPositionAllocator> 
-ReadPositionAllocatorFromFiles(const std::string& layoutDir, uint16_t numBss)
-{
-    Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator>();
-
-    std::vector<std::vector<double>> staPositions;
-    std::vector<std::vector<double>> apPositions;
-
-    // Read STA positions
-    std::ifstream staFile(layoutDir + "sta-layout-matrix.txt");
-    if (!staFile.is_open()) 
-    {
-        NS_LOG_ERROR("Can't open STA position file!");
-        return positionAlloc;
-    }
-
-    std::string line;
-    while (std::getline(staFile, line)) 
-    {
-        if (line.find("STA") != std::string::npos) 
-        {
-            // Skip the STA line, read coordinates in next line
-            if (std::getline(staFile, line)) 
-            {
-                std::istringstream iss(line);
-                double x, y, z;
-                if (iss >> x >> y >> z) 
-                {
-                staPositions.push_back({x, y, z});
-                }
-            }
-        }
-    }
-    staFile.close();
-
-    // Read AP positions (grouped)
-    std::ifstream apFile(layoutDir + "ap-layout-matrix.txt");
-    if (!apFile.is_open()) 
-    {
-        NS_LOG_ERROR("Can't open AP position file!");
-        return positionAlloc;
-    }
-
-    while (std::getline(apFile, line)) 
-    {
-        if (line.find("Group") != std::string::npos) 
-        {
-            // For each AP in the group
-            for (int i = 0; i < 3; i++) 
-            {
-                if (std::getline(apFile, line)) 
-                {
-                    std::istringstream iss(line);
-                    double x, y, z;
-                    if (iss >> x >> y >> z) 
-                    {
-                        apPositions.push_back({x, y, z});
-                    }
-                }
-            }
-        }
-    }
-    apFile.close();
-
-    for (uint32_t i = 0; i < numBss; i++) 
-    {
-        positionAlloc->Add(Vector(staPositions[i][0], staPositions[i][1], staPositions[i][2]));
-    }
-
-    for (uint32_t i = 0; i < numBss; i++) 
-    {
-        positionAlloc->Add(Vector(apPositions[i][0], apPositions[i][1], apPositions[i][2]));
-    }
-
-    for (uint32_t i = 0; i < numBss; i++) 
-    {
-        std::cout << "BSS " << i+1 << std::endl; 
-        std::cout << "AP " << i+1 << " x: " << apPositions[i][0] 
-        << ", y: " << apPositions[i][1] 
-        << ", z: " << apPositions[i][2] << std::endl;
-        std::cout << "STA " << i+1 << " x: " << staPositions[i][0] 
-        << ", y: " << staPositions[i][1] 
-        << ", z: " << staPositions[i][2] << std::endl;
-    }
-
-    return positionAlloc;
-}
 
 static void
 TimePasses ()
@@ -178,80 +103,206 @@ TimePasses ()
 }
 
 /**
- * \param udp true if UDP is used, false if TCP is used
- * \param serverApp a container of server applications
- * \param payloadSize the size in bytes of the packets
- * \return the bytes received by each server application
- */
-std::vector<uint64_t>
-GetRxBytes(bool udp, const ApplicationContainer& serverApp, uint32_t payloadSize)
-{
-    std::vector<uint64_t> rxBytes(serverApp.GetN(), 0);
-    if (udp)
-    {
-        for (uint32_t i = 0; i < serverApp.GetN(); i++)
-        {
-            rxBytes[i] = payloadSize * DynamicCast<UdpServer>(serverApp.Get(i))->GetReceived();
-        }
-    }
-    else
-    {
-        for (uint32_t i = 0; i < serverApp.GetN(); i++)
-        {
-            rxBytes[i] = DynamicCast<PacketSink>(serverApp.Get(i))->GetTotalRx();
-        }
-    }
-    return rxBytes;
-}
-
-/**
- * Print average throughput over an intermediate time interval.
- * \param rxBytes a vector of the amount of bytes received by each server application
- * \param udp true if UDP is used, false if TCP is used
- * \param serverApp a container of server applications
- * \param payloadSize the size in bytes of the packets
- * \param tputInterval the duration of an intermediate time interval
- * \param simulationTime the simulation time in seconds
+ * Print the buildings list in a format that can be used by Gnuplot to draw them.
+ *
+ * \param filename The output filename.
  */
 void
-PrintIntermediateTput(std::vector<uint64_t>& rxBytes,
-                      bool udp,
-                      const ApplicationContainer& serverApp,
-                      uint32_t payloadSize,
-                      Time tputInterval,
-                      Time simulationTime)
+PrintGnuplottableBuildingListToFile(std::string filename)
 {
-    auto newRxBytes = GetRxBytes(udp, serverApp, payloadSize);
-    Time now = Simulator::Now();
-
-    std::cout << "[" << (now - tputInterval).As(Time::S) << " - " << now.As(Time::S)
-              << "] Per-STA Throughput (Mbit/s):";
-
-    for (std::size_t i = 0; i < newRxBytes.size(); i++)
+    std::ofstream outFile;
+    outFile.open(filename.c_str(), std::ios_base::out | std::ios_base::trunc);
+    if (!outFile.is_open())
     {
-        std::cout << "\t\t(" << i << ") "
-                  << (newRxBytes[i] - rxBytes[i]) * 8. / tputInterval.GetMicroSeconds(); // Mbit/s
+        NS_LOG_ERROR("Can't open file " << filename);
+        return;
     }
-    std::cout << std::endl;
-
-    rxBytes.swap(newRxBytes);
-
-    if (now < (simulationTime - NanoSeconds(1)))
+    uint32_t index = 0;
+    for (auto it = BuildingList::Begin(); it != BuildingList::End(); ++it)
     {
-        Simulator::Schedule(Min(tputInterval, simulationTime - now - NanoSeconds(1)),
-                            &PrintIntermediateTput,
-                            rxBytes,
-                            udp,
-                            serverApp,
-                            payloadSize,
-                            tputInterval,
-                            simulationTime);
+        ++index;
+        Box box = (*it)->GetBoundaries();
+        outFile << "set object " << index << " rect from " << box.xMin << "," << box.yMin << " to "
+                << box.xMax << "," << box.yMax << std::endl;
+
+        // Print walls of the building
+        uint32_t wallIndex = 0;
+        for (auto wallIt = (*it)->GetIntWalls().begin(); wallIt != (*it)->GetIntWalls().end(); ++wallIt)
+        {
+            ++wallIndex;
+            Box wallBox = (*wallIt)->GetBoundaries();
+            outFile << "set object " << index << "_" << wallIndex << " rect from " << wallBox.xMin << "," << wallBox.yMin
+                    << " to " << wallBox.xMax << "," << wallBox.yMax << std::endl;
+        }
     }
 }
 
-bool findSubstring(const std::string& text, const std::string& substring) 
+void 
+MonitorPathLoss(uint32_t linkId, Ptr<IndoorBuildingsPropagationLossModel> lossModel, NodeContainer wifiAps, NodeContainer wifiStas) 
 {
-    return text.find(substring) != std::string::npos;
+    for (uint32_t i = 0; i < wifiAps.GetN(); i++)
+    {
+        double lossAp = lossModel->GetLoss(wifiAps.Get(i)->GetObject<MobilityModel>(), wifiStas.Get(0)->GetObject<MobilityModel>());
+        NS_LOG_INFO("Loss AP " << i << " with linkId " << linkId << " using frequency " << lossModel->GetFrequency() << " : " << lossAp << " dB");
+    }
+
+    // Schedule the next callback
+    Simulator::Schedule(MilliSeconds(100), &MonitorPathLoss, linkId, lossModel, wifiAps, wifiStas);
+}
+
+std::vector<Vector> 
+ReadWaypointsFromFile(const std::string& filename)
+{
+    std::vector<Vector> waypoints;
+    std::ifstream infile(filename.c_str());
+    
+    if (!infile.is_open())
+    {
+        NS_LOG_ERROR("Cannot open waypoints file: " << filename);
+        return waypoints;
+    }
+
+    double x, y, z;
+    std::string line;
+    while (std::getline(infile, line))
+    {
+        std::istringstream iss(line);
+        if (iss >> x >> y >> z)
+        {
+            waypoints.emplace_back(x, y, z);
+        }
+    }
+    return waypoints;
+}
+
+void 
+AddWallsFromFile(Ptr<Factory> factory, const std::string& filename)
+{
+    std::ifstream infile(filename.c_str());
+    if (!infile.is_open())
+    {
+        NS_LOG_ERROR("Cannot open walls assignment file: " << filename);
+        return;
+    }
+
+    uint32_t roomX, roomY;
+    double xMin, xMax, yMin, yMax, zMin, zMax;
+    std::string line;
+    while (std::getline(infile, line))
+    {
+        std::istringstream iss(line);
+        if (iss >> roomX >> roomY >> xMin >> xMax >> yMin >> yMax >> zMin >> zMax)
+        {
+            Ptr<Wall> wall = CreateObject<Wall>();
+            wall->SetBoundaries(Box(xMin, xMax, yMin, yMax, zMin, zMax));
+            factory->AddWallToRoom(roomX, roomY, wall);
+        }
+    }
+}
+
+Ptr<ListPositionAllocator> 
+ReadApPositionsFromFile(const std::string& filename)
+{
+    Ptr<ListPositionAllocator> allocator = CreateObject<ListPositionAllocator>();
+    std::ifstream infile(filename.c_str());
+    if (!infile.is_open())
+    {
+        NS_LOG_ERROR("Cannot open AP positions file: " << filename);
+        return allocator;
+    }
+
+    double x, y, z;
+    std::string line;
+    while (std::getline(infile, line))
+    {
+        std::istringstream iss(line);
+        if (iss >> x >> y >> z)
+        {
+            allocator->Add(Vector(x, y, z));
+        }
+    }
+    return allocator;
+}
+
+std::vector<std::vector<double>> 
+AssignFrequenciesToAps(uint16_t numBss, 
+                    std::vector<uint16_t>& numApsPerBss,
+                    uint32_t seed, 
+                    std::vector<double> freqBands)
+{
+    std::vector<std::vector<double>> freqAssignment(numBss);
+
+    // Set the random seed
+    RngSeedManager::SetSeed(seed);
+    Ptr<UniformRandomVariable> rand = CreateObject<UniformRandomVariable>();
+
+    std::default_random_engine rng(static_cast<unsigned int>(rand->GetValue(0, UINT32_MAX)));
+
+    for (uint16_t i = 0; i < numBss; i++) 
+    {
+        std::vector<double> randFreq = freqBands;
+        std::shuffle(randFreq.begin(), randFreq.end(), rng);
+
+        for (auto ap = 0; ap < numApsPerBss[i]; ap++) 
+        {
+            double freq;
+            if (ap < randFreq.size())
+            {
+                freq = randFreq[ap];
+            }
+            else
+            {
+                Ptr<UniformRandomVariable> rng = CreateObject<UniformRandomVariable>();
+                freq = randFreq[rand->GetInteger(0, randFreq.size() - 1)];
+            }
+            freqAssignment[i].push_back(freq);
+        }
+    }
+
+    for (uint16_t i = 0; i < numBss; i++)
+    {
+        std::cout << "BSS " << i+1 << " frequency assignments:" << std::endl;
+        for (uint32_t j = 0; j < numApsPerBss[i]; j++)
+        {
+            std::cout << "AP " << j+1 << ": " << freqAssignment[i][j] << " GHz" << std::endl;
+        }
+    }
+
+    return freqAssignment;
+}
+
+void
+AssocTrace(std::string context, Mac48Address staAddress, Mac48Address apAdress)
+{
+    std::cout << Simulator::Now().As(Time::S) << " STA is associated with " << apAdress << std::endl;
+
+    Analysis& staAnalysis = analysisMap[staAddress];
+    
+    staAnalysis.sumAssocTime += Simulator::Now();
+    staAnalysis.assocCount++;
+}
+
+void
+LinkAssocTrace(std::string context, uint8_t linkId, Mac48Address apAdress)
+{
+    std::cout << Simulator::Now().As(Time::S) << " STA link " << (int)linkId << " is associated with " << apAdress << std::endl;
+}
+
+void
+DeAssocTrace(std::string context, Mac48Address staAddress, Mac48Address apAdress)
+{
+    std::cout << Simulator::Now().As(Time::S) << " STA is deassociated" << std::endl;
+
+    Analysis& staAnalysis = analysisMap[staAddress];
+
+    staAnalysis.sumDeAssocTime += Simulator::Now();
+    staAnalysis.deAssocCount++;
+}
+
+void
+LinkDeAssocTrace(std::string context, uint8_t linkId, Mac48Address apAdress)
+{
+    std::cout << Simulator::Now().As(Time::S) << " STA link " << (int)linkId << " is deassociated with " << apAdress << std::endl;
 }
 
 /**
@@ -287,18 +338,17 @@ PhyTxTrace(std::string context, Ptr<const Packet> p, double txPowerW)
                         staAnalysis.phyTxMap[packetUid] = Simulator::Now();
                     }
                     staAnalysis.phyTxPackets++;
+
+                    if(m_reliabilityMode)
+                    {
+                        staAnalysis.phyTxMapReliability[std::make_pair(packetUid,hdr.GetAddr2())] = Simulator::Now();
+                    }                    
                 }
             }
         }
     }
 }
 
-/**
- * PHY-level RX trace.
- *
- * \param context The context.
- * \param p The packet.
- */
 void
 PhyRxTrace(std::string context, Ptr<const Packet> p)
 {
@@ -338,9 +388,9 @@ PhyRxTrace(std::string context, Ptr<const Packet> p)
   * \param context The context.
   * \param p The packet.
   */
- void
- MacTxWithAddressTrace(std::string context, Mac48Address txMacAddress, Ptr<const Packet> p)
- {
+void
+MacTxWithAddressTrace(std::string context, Mac48Address txMacAddress, Ptr<const Packet> p)
+{
     WifiMacHeader hdr;
     p->PeekHeader(hdr);
     if((hdr.IsQosData() || hdr.IsData()))
@@ -360,6 +410,11 @@ PhyRxTrace(std::string context, Ptr<const Packet> p)
                 staAnalysis.macTxMap[packetUid] = Simulator::Now();
             }
             staAnalysis.txPackets++;
+
+            if(m_reliabilityMode)
+            {
+                staAnalysis.macTxMapReliability[std::make_pair(packetUid,txMacAddress)] = Simulator::Now();
+            }  
         }
     }
 }
@@ -401,7 +456,7 @@ MacRxWithAddressTrace(std::string context, Mac48Address rxMacAddress,Ptr<const P
 }
 
 void
-DroppedMpduTrace(std::string context, Mac48Address txMacAddress,Ptr<const Packet> p)
+DroppedMpduTrace(std::string context, Mac48Address txMacAddress, Ptr<const Packet> p)
 {
     WifiMacHeader hdr;
     p->PeekHeader(hdr);
@@ -417,12 +472,27 @@ DroppedMpduTrace(std::string context, Mac48Address txMacAddress,Ptr<const Packet
         {
             Analysis& staAnalysis = analysisMap[m_apStaAddressMap.find(txMacAddress)->second];
                     
-            if (!m_reliabilityMode || staAnalysis.dropTxMap.find(packetUid) == staAnalysis.dropTxMap.end()) 
+            if(staAnalysis.dropTxMap.find(packetUid) != staAnalysis.dropTxMap.end())
             {
-                staAnalysis.dropTxMap[packetUid] = Simulator::Now();
+                staAnalysis.dropTxMap[packetUid] = staAnalysis.dropTxMap[packetUid] + 1;
             }
-            staAnalysis.dropPackets++;
-        }
+            else
+            {
+                staAnalysis.dropTxMap[packetUid] = 1;
+            }
+
+            if(m_reliabilityMode)
+            {
+                if(staAnalysis.dropTxMapReliability.find(std::make_pair(packetUid,txMacAddress)) != staAnalysis.dropTxMapReliability.end())
+                {
+                    staAnalysis.dropTxMapReliability[std::make_pair(packetUid,txMacAddress)] = staAnalysis.dropTxMapReliability[std::make_pair(packetUid,txMacAddress)] + 1;
+                }
+                else
+                {
+                    staAnalysis.dropTxMapReliability[std::make_pair(packetUid,txMacAddress)] = 1;
+                }
+            }          
+        } 
     }
 }
 
@@ -450,7 +520,19 @@ RetransmitMpduTrace(std::string context, Mac48Address txMacAddress, Ptr<const Pa
             else
             {
                 staAnalysis.retransmitTxMap[packetUid] = 1;
-            }   
+            }
+            
+            if(m_reliabilityMode)
+            {
+                if(staAnalysis.retransmitTxMapReliability.find(std::make_pair(packetUid,txMacAddress)) != staAnalysis.retransmitTxMapReliability.end())
+                {
+                    staAnalysis.retransmitTxMapReliability[std::make_pair(packetUid,txMacAddress)] = staAnalysis.retransmitTxMapReliability[std::make_pair(packetUid,txMacAddress)] + 1;
+                }
+                else
+                {
+                    staAnalysis.retransmitTxMapReliability[std::make_pair(packetUid,txMacAddress)] = 1;
+                }
+            }           
         }
     }
 }
@@ -472,9 +554,11 @@ ChAccessRequestTrace(std::string context, Mac48Address txMacAddress, Ptr<const P
         {
             Analysis& staAnalysis = analysisMap[m_apStaAddressMap.find(txMacAddress)->second];
             
-            if (staAnalysis.chReqTxMap.find(packetUid) == staAnalysis.chReqTxMap.end())
+            staAnalysis.chReqTxMap[packetUid] = Simulator::Now();
+
+            if(m_reliabilityMode)
             {
-                staAnalysis.chReqTxMap[packetUid] = Simulator::Now();
+                staAnalysis.chReqTxMapReliability[std::make_pair(packetUid,txMacAddress)] = Simulator::Now();
             }
         } 
     }
@@ -496,13 +580,13 @@ ChAccessGrantedTrace(std::string context, Mac48Address txMacAddress, Ptr<const P
         if(m_apStaAddressMap.find(txMacAddress) != m_apStaAddressMap.end())
         {
             Analysis& staAnalysis = analysisMap[m_apStaAddressMap.find(txMacAddress)->second];
-            
+                    
             staAnalysis.chGrantedTxMap[packetUid] = Simulator::Now();
 
-            // if (staAnalysis.chReqTxMap.find(packetUid) == staAnalysis.chReqTxMap.end())
-            // {
-            //     staAnalysis.chGrantedTxMap[packetUid] = Simulator::Now();
-            // }
+            if(m_reliabilityMode)
+            {
+                staAnalysis.chGrantedTxMapReliability[std::make_pair(packetUid,txMacAddress)] = Simulator::Now();
+            }
         } 
     }
 }
@@ -533,30 +617,193 @@ CalculateChAccessDelay(uint64_t& chAccessCount, Time& sumChAccessDelay, const st
         auto chReqPackets = chReqMap.find(packetUid);
         auto chGrantedPackets = chGrantedMap.find(packetUid);
 
-        if (txPackets != txMap.end())
+        if (chReqPackets == chReqMap.end())
         {
+            chAccessCount++;
+        }
+
+        if (txPackets != txMap.end())// && chReqPackets != chReqMap.end())
+        {
+            Time chAccessTime = chGrantedPackets->second - chReqPackets->second;
+            Time chAcessDelay;
             if (chReqPackets == chReqMap.end())
             {
                 chAccessCount++;
+                // std::cout << "Debug chAccessTime: " << chAccessTime.As(Time::S) << std::endl;
+                chAcessDelay = rxPackets.second - txPackets->second;
             }
-            Time chAccessTime = chGrantedPackets->second - chReqPackets->second;
-            chAccessTime = std::max(chAccessTime, Time("0s"));
-        
-            Time chAcessDelay = rxPackets.second - txPackets->second + chAccessTime;
-            // Time chAcessDelay = rxPackets.second - txPackets->second;
+            else
+            {
+                chAccessTime = std::max(chAccessTime, Time("0s"));
+                chAcessDelay = rxPackets.second - txPackets->second + chAccessTime;
+            }
             sumChAccessDelay += chAcessDelay;
         }
     }
 }
 
-main(int argc, char* argv[])
+void
+CalculateReliabilityE2EDelay(Time& sumDelay, const std::map<std::pair<uint64_t,Mac48Address>, Time>& txMap, const std::map<uint64_t, Time>& rxMap)
 {
-    // General parameters
-    std::string layoutDir = "./scratch/wifi-eht-static-scenario/";
-    std::string outputDir = "./scratch/wifi-eht-static-scenario/";
-    Time simulationTime{"2s"};
-    uint16_t numBss = 4;
-    uint32_t seed = 16;
+    for (const auto& rxPackets : rxMap)
+    {
+        uint64_t packetUid = rxPackets.first;
+        Time rxTime = rxPackets.second;
+        Time maxValidTxTime = Time::Min();
+        Time sumTxTime{"0s"};
+        uint16_t txCount = 0;
+        
+        for (const auto& txPackets : txMap)
+        {
+            if (txPackets.first.first == packetUid && txPackets.second < rxTime)
+            {
+                if (txPackets.second > maxValidTxTime)
+                {
+                    maxValidTxTime = txPackets.second;
+                    sumTxTime += txPackets.second;
+                    txCount++;
+                }
+            }
+        }
+
+        if (maxValidTxTime != Time::Min())
+        {
+            // Time chAccessDelay = rxTime - maxValidTxTime;
+            Time e2eDelay = rxTime - sumTxTime/txCount;
+            sumDelay += e2eDelay;
+        }
+    }
+}
+
+void
+CalculateReliabilityChAccessDelay(uint64_t& chAccessCount, Time& sumChAccessDelay, const std::map<std::pair<uint64_t,Mac48Address>, Time>& txMap, const std::map<uint64_t, Time>& rxMap, const std::map<std::pair<uint64_t,Mac48Address>, Time>& chReqMap, const std::map<std::pair<uint64_t,Mac48Address>, Time>& chGrantedMap)
+{
+    for (const auto& rxPackets : rxMap)
+    {
+        uint64_t packetUid = rxPackets.first;
+        Time rxTime = rxPackets.second;
+        Time maxValidTxTime = Time::Min();
+        Time minChAccessTxTime = Time::Max();
+        Time sumTxTime{"0s"};
+        Time sumChAccessTime{"0s"};
+        uint16_t txCount = 0;
+
+        for (const auto& txPackets : txMap)
+        {
+            if (txPackets.first.first == packetUid && txPackets.second < rxTime)
+            {
+                if (txPackets.second > maxValidTxTime)
+                {
+                    maxValidTxTime = txPackets.second;
+                    sumTxTime += txPackets.second;
+                    txCount++;
+                }
+            }
+        }
+
+        for (const auto& chReqPackets : chReqMap)
+        {
+            if (chReqPackets.first.first == packetUid)
+            {
+                auto it = chGrantedMap.find(std::make_pair(packetUid, chReqPackets.first.second));
+                if (it != chGrantedMap.end())
+                {
+                    auto chReqTime = it->second - chReqPackets.second;
+                    if (chReqTime < minChAccessTxTime)
+                    {
+                        minChAccessTxTime = chReqTime;
+                        sumChAccessTime += minChAccessTxTime;
+                    }
+                }
+            }
+        }
+
+        if (maxValidTxTime != Time::Min() && minChAccessTxTime != Time::Max())
+        {
+            Time chAccessDelay = rxTime - maxValidTxTime + minChAccessTxTime;
+            // Time chAccessDelay = rxTime - sumTxTime/txCount;
+            sumChAccessDelay += chAccessDelay;
+        }
+    }
+}
+
+uint64_t
+CalculateFirstTransmissionReliability(uint8_t numLinks, const std::map<std::pair<uint64_t,Mac48Address>, uint64_t>& txMap)
+{
+    std::map<uint64_t, uint64_t> retryPacketMap;
+    uint64_t initTx = 0;
+
+    for (const auto& txPackets : txMap)
+    {
+        uint64_t packetUid = txPackets.first.first;
+        if(retryPacketMap.find(packetUid) != retryPacketMap.end())
+        {
+            retryPacketMap[packetUid] = retryPacketMap[packetUid] + 1;
+        }
+        else
+        {
+            retryPacketMap[packetUid] = 1;
+        }   
+    }
+
+    for (const auto& [packetId, count] : retryPacketMap)
+    {
+        // std::cout << count << std::endl;
+        if (count < numLinks)
+        {
+            initTx++;
+        }
+    }
+    return initTx;
+}
+
+uint64_t
+CalculateAllDropReliability(uint8_t numLinks, const std::map<std::pair<uint64_t,Mac48Address>, uint64_t>& txMap)
+{
+    std::map<uint64_t, uint64_t> dropPacketMap;
+    uint64_t numDrop = 0;
+
+    for (const auto& txPackets : txMap)
+    {
+        uint64_t packetUid = txPackets.first.first;
+        if(dropPacketMap.find(packetUid) != dropPacketMap.end())
+        {
+            dropPacketMap[packetUid] = dropPacketMap[packetUid] + 1;
+        }
+        else
+        {
+            dropPacketMap[packetUid] = 1;
+        }   
+    }
+
+    for (const auto& [packetId, count] : dropPacketMap)
+    {
+        // std::cout << count << std::endl;
+        if (count >= numLinks)
+        {
+            numDrop++;
+        }
+    }
+    return numDrop;
+}
+
+int main(int argc, char *argv[])
+{
+    // Simulation parameters
+    uint32_t numNodes = 1; // Number of nodes
+    uint32_t seed = 75;    // Random seed
+    Time simulationTime{"20s"};
+    uint16_t numBss = 1;
+    std::vector<uint16_t> numApsPerBss = {4};
+    std::string currentDir = "./scratch/wifi-eht-roaming-scenario/";
+    std::string roomLayoutDir = currentDir + "walls-assignment.txt";
+    std::string apLayoutDir = currentDir + "ap-positions.txt";
+    std::string waypointDir = currentDir + "random-waypoints.txt";
+
+    // create a grid of buildings
+    double factorySizeX = 20; // m
+    double factorySizeY = 20;  // m
+    double factoryHeight = 3; // m
 
     // Wifi Simulation Parameters
     bool udp{true};
@@ -566,7 +813,7 @@ main(int argc, char* argv[])
     bool use80Plus80{false};
     uint16_t mpduBufferSize{512};
     std::string emlsrLinks;//="0,1,2";
-    std::vector<double> freqBands = {2.4,5,6};
+    std::vector<double> freqBands = {2.4,5,6};//{2.4,5,6};
     uint16_t paddingDelayUsec{32};
     uint16_t transitionDelayUsec{128};
     uint16_t channelSwitchDelayUsec{100};
@@ -582,7 +829,7 @@ main(int argc, char* argv[])
     std::string dlAckSeqType{"ACK-SU-FORMAT"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
     bool enableUlOfdma{false};
     bool enableBsrp{false};
-    int mcs{-1}; // -1 indicates an unset value
+    int mcs{0}; // -1 indicates an unset value
     uint32_t payloadSize =
         1474; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
     Time tputInterval{0}; // interval for detailed throughput measurement
@@ -592,12 +839,6 @@ main(int argc, char* argv[])
     Time accessReqInterval{0};
     bool enablePoisson = true;
     bool printOutput = false;
-
-    std::vector<bool> enableMultiApCoordination(numBss); 
-    for (uint16_t i = 0; i < numBss; i++)
-    {
-        enableMultiApCoordination[i] = true;
-    }
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("simulationTime", "Simulation time", simulationTime);
@@ -666,10 +907,9 @@ main(int argc, char* argv[])
                 "rng seed number",
                 seed);
     cmd.Parse(argc, argv);
-    
-    LogComponentEnable("WifiEhtStaticScenario", LOG_LEVEL_FUNCTION);
-    
-    // Set the random seed
+
+    LogComponentEnable("WifiEhtRoamingScenario", LOG_LEVEL_FUNCTION);
+
     RngSeedManager::SetSeed(seed);
 
     if (useRts)
@@ -700,15 +940,26 @@ main(int argc, char* argv[])
     }
 
     double prevThroughput[12] = {0};
-    
-    // Create Wifi nodes
-    NodeContainer wifiStaNodes; 
-    wifiStaNodes.Create(numBss);
-    NodeContainer wifiApNodes;
-    wifiApNodes.Create(numBss);
 
-    // Read APs and STAs from file
-    Ptr<ListPositionAllocator> positionAlloc = ReadPositionAllocatorFromFiles(layoutDir, numBss);
+    Ptr<Factory> factory = CreateObject<Factory>();
+    factory->SetBuildingType(Building::Office);
+    factory->SetBoundaries(Box(0, factorySizeX, 0, factorySizeY, 0, factoryHeight));
+    factory->SetIntWallsType(Building::ConcreteWithoutWindows);
+    factory->SetNFloors(1);
+    factory->SetNRoomsX(4);
+    factory->SetNRoomsY(4);
+
+    AddWallsFromFile(factory, roomLayoutDir);
+
+    // print the list of the office and walls to file
+    PrintGnuplottableBuildingListToFile("indoor-sequential-layout.txt");
+
+    // create one STA node
+    NodeContainer wifiStaNodes;
+    wifiStaNodes.Create(numNodes);
+    NodeContainer wifiApNodes;
+    uint16_t numAps = std::accumulate(numApsPerBss.begin(), numApsPerBss.end(), 0);
+    wifiApNodes.Create(numAps);
 
     bool has24GHz = false;
     for (uint16_t i = 0; i < wifiStaNodes.GetN(); i++)
@@ -862,21 +1113,22 @@ main(int argc, char* argv[])
     auto spectrumChannel5 = CreateObject<MultiModelSpectrumChannel>();
     auto spectrumChannel6 = CreateObject<MultiModelSpectrumChannel>();
     auto spectrumChannel2_4 = CreateObject<MultiModelSpectrumChannel>();
-    auto lossModel5 = CreateObject<FriisPropagationLossModel>();
-    auto lossModel6 = CreateObject<FriisPropagationLossModel>();
-    auto lossModel2_4 = CreateObject<FriisPropagationLossModel>();
+    auto lossModel5 = CreateObject<IndoorBuildingsPropagationLossModel>();
+    lossModel5->SetBuildingType(Building::Office);
+    auto lossModel6 = CreateObject<IndoorBuildingsPropagationLossModel>();
+    lossModel6->SetBuildingType(Building::Office);
+    auto lossModel2_4 = CreateObject<IndoorBuildingsPropagationLossModel>();
+    lossModel2_4->SetBuildingType(Building::Office);
     spectrumChannel5->AddPropagationLossModel(lossModel5);
     spectrumChannel6->AddPropagationLossModel(lossModel6);
     spectrumChannel2_4->AddPropagationLossModel(lossModel2_4);
-    
-    // lossModel2_4->SetMinLoss(200);
-    // lossModel5->SetMinLoss(200);
-    // lossModel6->SetMinLoss(200);
+
+    Ssid ssid = Ssid("ns3-80211be");
 
     SpectrumWifiPhyHelper phy(nLinks);
     phy.SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
     phy.Set("ChannelSwitchDelay", TimeValue(MicroSeconds(channelSwitchDelayUsec)));
-    
+
     // Sets up multiple link in the physical layer
     for (uint8_t linkId = 0; linkId < nLinks; linkId++)
     {
@@ -895,61 +1147,101 @@ main(int argc, char* argv[])
         }
     }
 
-    for (uint16_t i = 0; i < numBss; i++)
+    phy.Set ("TxPowerStart", DoubleValue (powSta));
+    phy.Set ("TxPowerEnd", DoubleValue (powSta));
+    phy.Set ("TxPowerLevels", UintegerValue (1));
+    phy.Set("CcaEdThreshold", DoubleValue(ccaEdTr));
+    phy.Set("RxSensitivity", DoubleValue(-92.0));
+
+    mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid));
+    staDevices.Add(wifi.Install(phy, mac, wifiStaNodes));
+
+    mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
+
+    phy.Set ("TxPowerStart", DoubleValue (powAp));
+    phy.Set ("TxPowerEnd", DoubleValue (powAp));
+    phy.Set ("TxPowerLevels", UintegerValue (1));
+    phy.Set("CcaEdThreshold", DoubleValue(ccaEdTr));
+    phy.Set("RxSensitivity", DoubleValue(-92.0));
+
+    apDevices.Add(wifi.Install(phy, mac, wifiApNodes));
+
+    Ptr<WifiNetDevice> staNetDev = staDevices.Get(0)->GetObject<WifiNetDevice>();
+    for (uint8_t linkId = 0; linkId < nLinks; linkId++)
     {
-        NS_LOG_INFO("Configuring BSS " << i+1);
-        
-        Ssid ssid = Ssid("ns3-80211bn-" + std::to_string(i+1));
-
-        phy.Set ("TxPowerStart", DoubleValue (powSta));
-        phy.Set ("TxPowerEnd", DoubleValue (powSta));
-        phy.Set ("TxPowerLevels", UintegerValue (1));
-        phy.Set("CcaEdThreshold", DoubleValue(ccaEdTr));
-        phy.Set("RxSensitivity", DoubleValue(-92.0));
-
-        mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid));
-        staDevices.Add(wifi.Install(phy, mac, wifiStaNodes.Get(i)));
-
-        if(!frameAggregation)
+        Ptr<WifiPhy> phy = staNetDev->GetPhy(linkId);
+        double operatingFrequency = phy->GetFrequency()*1e6;
+        if (phy)
         {
-            mac.SetType("ns3::ApWifiMac",
-                "Ssid", SsidValue(ssid),
-                "BE_MaxAmpduSize",UintegerValue(0), // Enable A-MPDU with the highest maximum size allowed by the standard);
-                "BE_MaxAmsduSize",UintegerValue(0)); // Enable A-MSDU with the highest maximum size (in Bytes) allowed
-        }
-        else 
-        {
-            mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
+            std::cout << "STA Link " << unsigned(linkId) << " frequency: " << operatingFrequency << " Hz" << std::endl;
         }
 
-        if (dlAckSeqType != "NO-OFDMA")
+        if (findSubstring(channelStr[linkId],"5GHZ"))
         {
-            mac.SetMultiUserScheduler("ns3::RrMultiUserScheduler",
-                                        "EnableUlOfdma",
-                                        BooleanValue(enableUlOfdma),
-                                        "EnableBsrp",
-                                        BooleanValue(enableBsrp),
-                                        "AccessReqInterval",
-                                        TimeValue(accessReqInterval));
+            lossModel5->SetFrequency(operatingFrequency);
         }
-        
-        phy.Set ("TxPowerStart", DoubleValue (powAp));
-        phy.Set ("TxPowerEnd", DoubleValue (powAp));
-        phy.Set ("TxPowerLevels", UintegerValue (1));
-        phy.Set("CcaEdThreshold", DoubleValue(ccaEdTr));
-        phy.Set("RxSensitivity", DoubleValue(-92.0));
-
-        apDevices.Add(wifi.Install(phy, mac, wifiApNodes.Get(i)));
+        else if (findSubstring(channelStr[linkId],"6GHZ"))
+        {
+            lossModel6->SetFrequency(operatingFrequency);
+        }
+        else if (findSubstring(channelStr[linkId],"2_4GHZ"))
+        {
+            lossModel2_4->SetFrequency(operatingFrequency);
+        }
     }
 
     // Install mobility
     MobilityHelper mobility;
-    mobility.SetPositionAllocator(positionAlloc);
+    MobilityHelper mobilitySta;
+    BuildingsHelper building;
+
+    mobilitySta.SetMobilityModel(
+        "ns3::SequentialWalk2dIndoorMobilityModel",
+        "TimeInterval", StringValue("1s"),
+        "WaypointIndex", UintegerValue(0),
+        "Bounds", RectangleValue(Rectangle(0, factorySizeX, 0.0, factorySizeY)),
+        "Factory", PointerValue(factory));
+    Ptr<IndoorPositionAllocator> position = CreateObject<IndoorPositionAllocator>();
+    Ptr<UniformRandomVariable> xPos = CreateObject<UniformRandomVariable>();
+    xPos->SetAttribute("Min", DoubleValue(0.25));
+    xPos->SetAttribute("Max", DoubleValue(0.25));
+    Ptr<UniformRandomVariable> yPos = CreateObject<UniformRandomVariable>();
+    yPos->SetAttribute("Min", DoubleValue(0.25));
+    yPos->SetAttribute("Max", DoubleValue(0.25));
+    Ptr<UniformRandomVariable> zPos = CreateObject<UniformRandomVariable>();
+    zPos->SetAttribute("Min", DoubleValue(1.5));
+    zPos->SetAttribute("Max", DoubleValue(1.5));
+    position->SetAttribute("X", PointerValue(xPos));
+    position->SetAttribute("Y", PointerValue(yPos));
+    position->SetAttribute("Z", PointerValue(zPos));
+    mobilitySta.SetPositionAllocator(position);
+    mobilitySta.Install(wifiStaNodes);
+    building.Install(wifiStaNodes);
+
+    Ptr<ListPositionAllocator> apPosition = ReadApPositionsFromFile(apLayoutDir);
+    if (apPosition->GetSize() == 0)
+    {
+        NS_LOG_ERROR("No AP positions found in file: " << apLayoutDir);
+        return 1;
+    }
+    mobility.SetPositionAllocator(apPosition);
     mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-    mobility.Install(wifiStaNodes);
     mobility.Install(wifiApNodes);
-    
-    /* Internet stack*/
+    building.Install(wifiApNodes);
+
+    // Set waypoints programmatically
+    auto mob = wifiStaNodes.Get(0)->GetObject<SequentialWalk2dIndoorMobilityModel>();
+    std::vector<Vector> waypoints;
+    waypoints = ReadWaypointsFromFile(waypointDir);
+    if (waypoints.empty())
+    {
+        NS_LOG_ERROR("No waypoints found in file: " << waypointDir);
+        return 1;
+    }
+    mob->SetWaypoints(waypoints);
+    mob->SetCurrentWaypointIndex(0);
+
+    // Internet stack
     InternetStackHelper stack;
     stack.Install(wifiApNodes);
     stack.Install(wifiStaNodes);
@@ -961,6 +1253,10 @@ main(int argc, char* argv[])
 
     staNodeInterfaces = address.Assign(staDevices);
     apNodeInterface = address.Assign(apDevices);
+
+    // enable the traces for the mobility model
+    AsciiTraceHelper ascii;
+    MobilityHelper::EnableAsciiAll(ascii.CreateFileStream("indoor-sequential-mobility-trace-example.mob"));
 
     /* Setting applications */
     std::vector<ApplicationContainer> serverApps(numBss);
@@ -1045,7 +1341,33 @@ main(int argc, char* argv[])
     Config::Set("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MpduBufferSize",
                 UintegerValue(mpduBufferSize));
 
-    // Enable tracing
+    // Simulation clock
+    Simulator::Schedule (MicroSeconds (100), &TimePasses);
+
+    // Schedule the pathloss calculation callback
+    for (uint32_t linkId = 0; linkId < nLinks; linkId++)
+    {
+        if (findSubstring(channelStr[linkId],"5GHZ"))
+        {
+            Simulator::Schedule(Seconds(0), &MonitorPathLoss, linkId, lossModel5, wifiApNodes, wifiStaNodes);
+        }
+        else if (findSubstring(channelStr[linkId],"6GHZ"))
+        {
+            
+            Simulator::Schedule(Seconds(0), &MonitorPathLoss, linkId, lossModel6, wifiApNodes, wifiStaNodes);
+        }
+        else if (findSubstring(channelStr[linkId],"2_4GHZ"))
+        {
+            Simulator::Schedule(Seconds(0), &MonitorPathLoss, linkId, lossModel2_4, wifiApNodes, wifiStaNodes);
+        }
+    }
+
+    // Enable the traces
+    Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/NewAssoc", MakeCallback(&AssocTrace));
+    Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/NewDeAssoc", MakeCallback(&DeAssocTrace));
+    Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/LinkAssoc", MakeCallback(&LinkAssocTrace));
+    Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/LinkDeAssoc", MakeCallback(&LinkDeAssocTrace));
+
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTxWithAddress", MakeCallback(&MacTxWithAddressTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRxWithAddress", MakeCallback(&MacRxWithAddressTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phys/*/PhyTxBegin",MakeCallback(&PhyTxTrace));
@@ -1054,18 +1376,19 @@ main(int argc, char* argv[])
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/FrameExchangeManagers/*/FemMpduRetransmitted",MakeCallback(&RetransmitMpduTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/BE_Txop/StartChRequestAccess",MakeCallback(&ChAccessRequestTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/BE_Txop/AccesRequestGranted",MakeCallback(&ChAccessGrantedTrace));
-    
-    Simulator::Schedule (MicroSeconds (100), &TimePasses);
 
-    Simulator::Stop(simulationTime + Seconds(1.0));
+
+    Simulator::Stop(simulationTime);
+
     Simulator::Run();
-    
+
     double sumThroughput = 0;
     double sumReliability = 0;
     double sumDropReliabilty = 0;
     double sumTxReliability = 0;
     Time sumDelay{"0s"};
     Time sumChAccessDelay{"0s"};
+    Time sumAssocDelay{"0s"};
 
     for (auto& [macAddresss, analysis] : analysisMap) 
     {
@@ -1097,11 +1420,16 @@ main(int argc, char* argv[])
         //Delay
         CalculateChAccessDelay(analysis.chAccessCount, analysis.sumChAccessDelay, analysis.phyTxMap, analysis.phyRxMap, analysis.chReqTxMap, analysis.chGrantedTxMap);
         CalculateE2EDelay(analysis.sumDelay, analysis.macTxMap, analysis.macRxMap);
-        
+
         analysis.avgChAccessDelay = analysis.sumChAccessDelay/(analysis.phyRxMap.size()-analysis.chAccessCount);
         sumChAccessDelay += analysis.avgChAccessDelay;
         analysis.avgDelay = analysis.sumDelay/analysis.macRxMap.size();
         sumDelay += analysis.avgDelay;
+
+        //Association and Deassociation Delay
+        Time assocDelay{"0s"};
+        assocDelay = analysis.sumAssocTime - analysis.sumDeAssocTime;
+        sumAssocDelay += assocDelay;
 
         // Performance Summary
         std::cout << "\nPerformance Evaluation" << std::endl;
@@ -1109,8 +1437,9 @@ main(int argc, char* argv[])
         std::cout << "Packets Dropped Reliability : " << dropReliability*100 << "%" << std::endl;
         std::cout << "Packets Received Reliability : " << reliability*100 << "%" << std::endl;
         std::cout << "1st Transmission Reliability : " << txReliability*100 << "%" << std::endl;
-        std::cout << "Average E2E Delay: " << analysis.avgDelay.As(Time::MS) << std::endl;
-        std::cout << "Average Ch Access Delay: " << analysis.avgChAccessDelay.As(Time::MS) << std::endl;
+        std::cout << "E2E Delay: " << analysis.avgDelay.As(Time::MS) << std::endl;
+        std::cout << "Ch Access Delay: " << analysis.avgChAccessDelay.As(Time::MS) << std::endl;
+        std::cout << "Association Delay: " << assocDelay.As(Time::MS) << std::endl;
     }
 
     sumThroughput = sumThroughput/numBss;
@@ -1119,6 +1448,7 @@ main(int argc, char* argv[])
     sumTxReliability = sumTxReliability/numBss;
     sumDelay = sumDelay/numBss;
     sumChAccessDelay = sumChAccessDelay/numBss;
+    sumAssocDelay = sumAssocDelay/numBss;
 
     std::cout << "\n=== Evaluation Summary ===" << std::endl;
     std::cout << "Seed : " << seed << std::endl;
@@ -1128,19 +1458,20 @@ main(int argc, char* argv[])
     std::cout << "Average 1st Transmission Reliability : " << sumTxReliability*100 << "%" << std::endl;
     std::cout << "Average E2E Delay: " << sumDelay.As(Time::MS) << std::endl;
     std::cout << "Average Ch Acess Delay: " << sumChAccessDelay.As(Time::MS) << std::endl;
+    std::cout << "Average Assoc Delay: " << sumAssocDelay.As(Time::MS) << std::endl;
 
     if(printOutput)
     {
         std::ofstream outputFile;
         std::string outputFileName;
-
+        
         if (poissonLambda > 0)
         {
-        outputFileName = outputDir + "/wifi-eht-results-unsaturated";
+        outputFileName = currentDir + "/wifi-eht-roaming-results-unsaturated";
         }
         else
         {
-            outputFileName = outputDir + "/wifi-eht-results";
+            outputFileName = currentDir + "/wifi-ehr-roaming-results";
         }
 
         if (!(fileExists(outputFileName)))

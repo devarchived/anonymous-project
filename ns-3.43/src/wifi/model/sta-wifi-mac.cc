@@ -135,6 +135,14 @@ StaWifiMac::GetTypeId()
                             "ns3::StaWifiMac::LinkSetupCallback",
                             TypeId::OBSOLETE,
                             "Disassociation only occurs at MLD level; use DeAssoc trace.")
+            .AddTraceSource("NewAssoc",
+                            "Associated with an access point",
+                            MakeTraceSourceAccessor(&StaWifiMac::m_newAssocLogger),
+                            "ns3::StaWifiMac::AssocCallback")
+            .AddTraceSource("NewDeAssoc",
+                            "Deassociated with an access point",
+                            MakeTraceSourceAccessor(&StaWifiMac::m_newDeAssocLogger),
+                            "ns3::StaWifiMac::AssocCallback")
             .AddTraceSource("LinkAssoc",
                             "A link from STA MLD is associated with an AP",
                             MakeTraceSourceAccessor(&StaWifiMac::m_assocLinkLogger),
@@ -1379,10 +1387,17 @@ StaWifiMac::Disassociated()
     }
 
     NS_LOG_DEBUG("Set state to UNASSOCIATED and start scanning");
+    
+    if(m_state == ASSOCIATED)
+    {
+        m_newDeAssocLogger(GetAddress(), apAddr);
+    }
+    
     SetState(UNASSOCIATED);
     // cancel the association request timer (see issue #862)
     m_assocRequestEvent.Cancel();
     m_deAssocLogger(apAddr);
+
     m_aid = 0; // reset AID
     TryToEnsureAssociated();
 }
@@ -1432,6 +1447,7 @@ StaWifiMac::DisassociatedOnLink(uint8_t linkId)
         NS_LOG_INFO("All links are now unassociated.");
         SetState(UNASSOCIATED);
         m_deAssocLogger(apAddr);
+        m_newDeAssocLogger(GetAddress(), apAddr);
     }
 
     StartScanningOnLink(linkId);
@@ -2046,13 +2062,16 @@ StaWifiMac::ReceiveAssocResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
         
         if(MultiApCoordinationEnabled() && m_state != ASSOCIATED)
         {
-            m_assocLogger(hdr.GetAddr3());
+            m_newAssocLogger(GetAddress(),hdr.GetAddr3());
         }
         SetState(ASSOCIATED);
         
         // Set and trace the link state to LINK_ASSOCIATED
-        SetLinkState(linkId, LINK_ASSOCIATED);
-        m_assocLinkLogger(linkId, hdr.GetAddr3());
+        if (MultiApCoordinationEnabled())
+        {
+            SetLinkState(linkId, LINK_ASSOCIATED);
+            m_assocLinkLogger(linkId, hdr.GetAddr3());
+        }
 
         if ((GetNLinks() > 1) && assocResp.Get<MultiLinkElement>().has_value())
         {
@@ -2090,6 +2109,7 @@ StaWifiMac::ReceiveAssocResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
         {
             if(!MultiApCoordinationEnabled())
             {
+                m_newAssocLogger(GetAddress(), hdr.GetAddr3());
                 m_assocLogger(hdr.GetAddr3());
             }
         }
@@ -2205,6 +2225,7 @@ StaWifiMac::ReceiveAssocResp(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
             // this is an ML setup, trace the MLD address of the AP (only once)
             if(!MultiApCoordinationEnabled())
             {
+                m_newAssocLogger(GetAddress(), *apMldAddress);
                 m_assocLogger(*apMldAddress);
             }
         }
