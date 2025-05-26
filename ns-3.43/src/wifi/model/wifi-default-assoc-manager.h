@@ -36,6 +36,7 @@ class WifiDefaultAssocManager : public WifiAssocManager
     bool Compare(const StaWifiMac::ApInfo& lhs, const StaWifiMac::ApInfo& rhs) const override;
 
     virtual bool IsWaitBeaconEventPending(uint8_t linkId) const override;
+    virtual bool IsProbeRequestEventPending(uint8_t linkId) const override;
 
   protected:
     void DoDispose() override;

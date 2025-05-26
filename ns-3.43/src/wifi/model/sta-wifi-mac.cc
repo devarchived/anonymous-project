@@ -1432,13 +1432,8 @@ StaWifiMac::DisassociatedOnLink(uint8_t linkId)
         NS_LOG_INFO("All links are now unassociated.");
         SetState(UNASSOCIATED);
         m_deAssocLogger(apAddr);
-        // m_aid = 0; // reset AID
-
-        // StartScanning();
-        // return;
     }
 
-    // TryToEnsureAssociated();
     StartScanningOnLink(linkId);
 }
 
@@ -1960,34 +1955,6 @@ StaWifiMac::ReceiveBeacon(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
                         }
                     }
                 }
-                // NS_LOG_INFO("Initial Roaming state " << m_roamingStateMap[linkId] << " for " << hdr.GetAddr3() << " for associated link " << +linkId);
-
-                // if (hdr.GetAddr3() == GetBssid(linkId))
-                // {
-                //     if (m_roamingStateMap[linkId] <= apInfo.m_snr)
-                //     {
-                //         RestartBeaconWatchdogOnLink(linkId, delay);
-                //     }
-                //     // if (m_roamingStateMap[linkId] != REQUEST_ROAMING)
-                //     // {
-                //     //     RestartBeaconWatchdogOnLink(linkId, delay);
-                //     //     m_roamingStateMap[linkId] = DECLINE_ROAMING;
-                //     // }
-                //     NS_LOG_INFO("Beacon received from " << hdr.GetAddr3() << " for associated link " << +linkId);
-                //     NS_LOG_DEBUG("Beacon received from " << hdr.GetAddr3() << " for associated link " << +linkId);
-                //     UpdateApInfo(apInfo.m_frame, hdr.GetAddr2(), hdr.GetAddr3(), linkId);
-                // }
-                // else
-                // {
-                //     if (m_roamingStateMap[linkId] != DECLINE_ROAMING)
-                //     {
-                //         NS_LOG_INFO("Beacon received from better AP " << hdr.GetAddr3() << " for associated link " << +linkId);
-                //         NS_LOG_DEBUG("Beacon received from better AP " << hdr.GetAddr3() << " for associated link " << +linkId);
-                //         m_roamingStateMap[linkId] = REQUEST_ROAMING;
-                //     } 
-                // }
-
-                // NS_LOG_INFO("After assignment roaming state " << m_roamingStateMap[linkId] << " for " << hdr.GetAddr3() << " for associated link " << +linkId);
             }
             else
             {
@@ -1995,7 +1962,6 @@ StaWifiMac::ReceiveBeacon(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
                 NS_LOG_DEBUG("Beacon received from " << hdr.GetAddr3() << " for unassociated link " << +linkId);
                 if (!(m_assocManager->IsWaitBeaconEventPending(linkId)))// || m_assocManager.m_probeRequestEventMap[linkId].IsPending()))
                 {
-                    // TryToEnsureAssociated();
                     StartScanningOnLink(linkId);
                 }
                 m_assocManager->NotifyApInfo(std::move(apInfo));

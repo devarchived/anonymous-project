@@ -150,6 +150,8 @@ class WifiAssocManager : public Object
 
     virtual bool IsWaitBeaconEventPending(uint8_t linkId) const;
 
+    virtual bool IsProbeRequestEventPending(uint8_t linkId) const;
+
   protected:
     /**
      * Constructor (protected as this is an abstract base class)

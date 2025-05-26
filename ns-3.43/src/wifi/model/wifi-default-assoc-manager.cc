@@ -438,4 +438,21 @@ WifiDefaultAssocManager::IsWaitBeaconEventPending(uint8_t linkId) const
     return m_waitBeaconEvent.IsPending();
 }
 
+bool 
+WifiDefaultAssocManager::IsProbeRequestEventPending(uint8_t linkId) const
+{
+    NS_LOG_FUNCTION(this << +linkId);
+    
+    if (m_mac->MultiApCoordinationEnabled())
+    {
+        auto it = m_probeRequestEventMap.find(linkId);
+        if (it != m_probeRequestEventMap.end())
+        {
+            return it->second.IsPending();
+        }
+    }
+    
+    return m_probeRequestEvent.IsPending();
+}
+
 } // namespace ns3

@@ -502,4 +502,12 @@ WifiAssocManager::IsWaitBeaconEventPending(uint8_t linkId) const
     return false;
 }
 
+bool 
+WifiAssocManager::IsProbeRequestEventPending(uint8_t linkId) const
+{
+    NS_LOG_FUNCTION(this << +linkId);
+    
+    return false;
+}
+
 } // namespace ns3
