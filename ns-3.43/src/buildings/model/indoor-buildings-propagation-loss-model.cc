@@ -153,11 +153,13 @@ IndoorBuildingsPropagationLossModel::InternalWallsLoss(Ptr<MobilityBuildingInfo>
         // double dy = std::abs(a->GetRoomNumberY() - b->GetRoomNumberY());
         // return m_lossInternalWall * (dx + dy);
         auto wallCount = a->GetBuilding()->CountWallsBetweenPoints(a->GetCachedPosition(), b->GetCachedPosition());
+        NS_LOG_INFO("Internal walls count: " << wallCount);
         return m_lossInternalWall * wallCount;
     }
     else
     {
         auto wallCount = a->GetBuilding()->CountWallsBetweenPoints(a->GetCachedPosition(), b->GetCachedPosition());
+        NS_LOG_INFO("Internal walls count: " << wallCount);
         return m_lossInternalWall * wallCount;
     }   
 }

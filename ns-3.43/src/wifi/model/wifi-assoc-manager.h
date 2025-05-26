@@ -81,7 +81,8 @@ class WifiAssocManager : public Object
      * \param mac the pointer to the STA wifi MAC
      */
     void SetStaWifiMac(Ptr<StaWifiMac> mac);
-
+    
+    Ptr<StaWifiMac> GetStaWifiMac() const;
     /**
      * Request the Association Manager to start a scanning procedure according to
      * the given scanning parameters. At subclass' discretion, stored information
@@ -146,6 +147,8 @@ class WifiAssocManager : public Object
      */
     static std::list<WifiAssocManager::RnrLinkInfo> GetAllAffiliatedAps(
         const ReducedNeighborReport& rnr);
+
+    virtual bool IsWaitBeaconEventPending(uint8_t linkId) const;
 
   protected:
     /**

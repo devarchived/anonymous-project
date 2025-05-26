@@ -35,6 +35,8 @@ class WifiDefaultAssocManager : public WifiAssocManager
     void NotifyChannelSwitched(uint8_t linkId) override;
     bool Compare(const StaWifiMac::ApInfo& lhs, const StaWifiMac::ApInfo& rhs) const override;
 
+    virtual bool IsWaitBeaconEventPending(uint8_t linkId) const override;
+
   protected:
     void DoDispose() override;
     bool CanBeInserted(const StaWifiMac::ApInfo& apInfo) const override;

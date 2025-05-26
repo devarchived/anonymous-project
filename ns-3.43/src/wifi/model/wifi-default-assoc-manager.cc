@@ -110,7 +110,7 @@ WifiDefaultAssocManager::DoStartScanning()
 void
 WifiDefaultAssocManager::DoStartScanningOnLink(uint8_t linkId)
 {
-    NS_LOG_FUNCTION(this);
+    NS_LOG_FUNCTION(this << +linkId);
 
     m_probeRequestEventMap[linkId].Cancel();
     m_waitBeaconEventMap[linkId].Cancel();
@@ -147,7 +147,6 @@ WifiDefaultAssocManager::EndScanning()
     // If multi-link setup is not possible, just call ScanningTimeout() and return
     if (!CanSetupMultiLink(mle, rnr) || (apList = GetAllAffiliatedAps(*rnr)).empty())
     {   
-        NS_LOG_INFO ("Debug EndScanning() does not support multi-link");
         if (GetSortedList().size() > 1 && m_mac->MultiApCoordinationEnabled())
         {
             NS_LOG_INFO("Size of the apList : " << GetSortedList().size());
@@ -306,7 +305,7 @@ WifiDefaultAssocManager::EndScanning()
 void
 WifiDefaultAssocManager::EndScanningOnLink(uint8_t linkId)
 {
-    NS_LOG_FUNCTION(this);
+    NS_LOG_FUNCTION(this << +linkId);
     OptMleConstRef mle;
     OptRnrConstRef rnr;
     std::list<WifiAssocManager::RnrLinkInfo> apList;
@@ -314,7 +313,6 @@ WifiDefaultAssocManager::EndScanningOnLink(uint8_t linkId)
     // If multi-link setup is not possible, just call ScanningTimeout() and return
     if (!CanSetupMultiLink(mle, rnr) || (apList = GetAllAffiliatedAps(*rnr)).empty())
     {   
-        NS_LOG_INFO ("Debug EndScanning() does not support multi-link");
         if (GetSortedList().size() > 1 && m_mac->MultiApCoordinationEnabled())
         {
             NS_LOG_INFO("Size of the apList : " << GetSortedList().size());
@@ -344,7 +342,7 @@ WifiDefaultAssocManager::EndScanningOnLink(uint8_t linkId)
                 }
             }  
         }
-        ScanningTimeout();
+        ScanningTimeoutOnLink(linkId);
         return;
     }
 }
@@ -394,13 +392,50 @@ WifiDefaultAssocManager::ChannelSwitchTimeout(uint8_t linkId)
 bool
 WifiDefaultAssocManager::CanBeInserted(const StaWifiMac::ApInfo& apInfo) const
 {
-    return (m_waitBeaconEvent.IsPending() || m_probeRequestEvent.IsPending());
+    NS_LOG_FUNCTION(this << apInfo);
+
+    bool waitBeaconOnLinkPending = false;
+    bool probeRequestOnLinkPending = false;
+    
+    if(m_mac->MultiApCoordinationEnabled())
+    {
+        auto beaconIt = m_waitBeaconEventMap.find(apInfo.m_linkId);
+        if (beaconIt != m_waitBeaconEventMap.end())
+        {
+            waitBeaconOnLinkPending = beaconIt->second.IsPending();
+        }
+
+        auto probeIt = m_probeRequestEventMap.find(apInfo.m_linkId);
+        if (probeIt != m_probeRequestEventMap.end())
+        {
+            probeRequestOnLinkPending = probeIt->second.IsPending();
+        }
+    }
+    
+    return (m_waitBeaconEvent.IsPending() || m_probeRequestEvent.IsPending() || waitBeaconOnLinkPending || probeRequestOnLinkPending);
 }
 
 bool
 WifiDefaultAssocManager::CanBeReturned(const StaWifiMac::ApInfo& apInfo) const
 {
     return true;
+}
+
+bool 
+WifiDefaultAssocManager::IsWaitBeaconEventPending(uint8_t linkId) const
+{
+    NS_LOG_FUNCTION(this << +linkId);
+    
+    if (m_mac->MultiApCoordinationEnabled())
+    {
+        auto it = m_waitBeaconEventMap.find(linkId);
+        if (it != m_waitBeaconEventMap.end())
+        {
+            return it->second.IsPending();
+        }
+    }
+    
+    return m_waitBeaconEvent.IsPending();
 }
 
 } // namespace ns3

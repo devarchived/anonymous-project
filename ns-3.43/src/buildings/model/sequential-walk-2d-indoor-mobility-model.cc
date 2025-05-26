@@ -82,7 +82,7 @@ SequentialWalk2dIndoorMobilityModel::ScheduleNextWaypoint()
 
     if (m_currentWaypointIndex < m_waypoints.size())
     {
-        std::cout << "Moving to waypoint: " << m_currentWaypointIndex << std::endl;
+        NS_LOG_INFO("Moving to waypoint: " << m_currentWaypointIndex);
         Time delay = m_timeInterval;
         m_event = Simulator::Schedule(delay, &SequentialWalk2dIndoorMobilityModel::MoveToNextWaypoint, this);
     }
@@ -164,6 +164,7 @@ SequentialWalk2dIndoorMobilityModel::DoSetPosition(const Vector& position)
 {
     NS_LOG_FUNCTION(this);
     NS_LOG_INFO("New position: " << position);
+    std::cout << "New position: " << position << std::endl;
 
     NS_ASSERT(m_bounds.IsInside(position));
     m_helper.SetPosition(position);

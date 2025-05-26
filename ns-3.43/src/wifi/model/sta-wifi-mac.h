@@ -355,6 +355,8 @@ class StaWifiMac : public WifiMac
      */
     StaLinkEntity& GetStaLink(const std::unique_ptr<WifiMac::LinkEntity>& link) const;
 
+    void ResetRoamingState(uint8_t linkId, Time beaconInterval);
+
   public:
     /**
      * The current MAC state of the STA.
@@ -665,8 +667,13 @@ class StaWifiMac : public WifiMac
     std::map<uint8_t, LinkState> m_linkStateMap;
     std::map<uint8_t, EventId> m_beaconWatchdogLinkMap;
     std::map<uint8_t, Time> m_beaconWatchdogEndMap;
-    std::map<uint8_t, bool> m_roamingStateMap;
+    std::map<uint8_t, RoamingState> m_roamingStateMap;
     std::map<uint8_t, EventId> m_roamingStateResetLinkMap;
+    std::map<uint8_t, double> m_snrLinkMap;
+    std::map<uint8_t, Time> m_beaconRemTimeMap;
+
+    TracedCallback<uint8_t, Mac48Address> m_assocLinkLogger; 
+    TracedCallback<uint8_t, Mac48Address> m_deAssocLinkLogger; 
     
 };
 

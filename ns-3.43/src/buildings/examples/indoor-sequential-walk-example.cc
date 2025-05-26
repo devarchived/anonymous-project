@@ -113,6 +113,29 @@ void AddWallsFromFile(Ptr<Factory> factory, const std::string& filename)
     }
 }
 
+Ptr<ListPositionAllocator> ReadApPositionsFromFile(const std::string& filename)
+{
+    Ptr<ListPositionAllocator> allocator = CreateObject<ListPositionAllocator>();
+    std::ifstream infile(filename.c_str());
+    if (!infile.is_open())
+    {
+        NS_LOG_ERROR("Cannot open AP positions file: " << filename);
+        return allocator;
+    }
+
+    double x, y, z;
+    std::string line;
+    while (std::getline(infile, line))
+    {
+        std::istringstream iss(line);
+        if (iss >> x >> y >> z)
+        {
+            allocator->Add(Vector(x, y, z));
+        }
+    }
+    return allocator;
+}
+
 int main(int argc, char *argv[])
 {
     LogComponentEnable("IndoorSequentialWalkExample", LOG_LEVEL_LOGIC);

@@ -39,7 +39,16 @@ WifiAssocManager::ApInfoCompare::operator()(const StaWifiMac::ApInfo& lhs,
     NS_ASSERT_MSG(lhs.m_bssid != rhs.m_bssid,
                   "Comparing two ApInfo objects with the same BSSID: " << lhs.m_bssid);
     
-    std::cout << "Comparing " << lhs.m_bssid << " and " << rhs.m_bssid << std::endl;
+    // std::cout << "Comparing " << lhs.m_bssid << " and " << rhs.m_bssid << std::endl;
+    
+    if (m_manager.GetStaWifiMac()->MultiApCoordinationEnabled())
+    {
+        if (lhs.m_channel.band != rhs.m_channel.band)
+        {
+            // std::cout << "Different bands" << std::endl;
+            return lhs.m_channel.band < rhs.m_channel.band;
+        }
+    }
     
     bool lhsBefore = m_manager.Compare(lhs, rhs);
     if (lhsBefore)
@@ -100,6 +109,12 @@ WifiAssocManager::SetStaWifiMac(Ptr<StaWifiMac> mac)
     m_mac = mac;
 }
 
+Ptr<StaWifiMac>
+WifiAssocManager::GetStaWifiMac() const
+{
+    return m_mac;
+}
+
 const WifiAssocManager::SortedList&
 WifiAssocManager::GetSortedList() const
 {
@@ -135,6 +150,8 @@ WifiAssocManager::MatchScanParams(const StaWifiMac::ApInfo& apInfo) const
         {
             NS_LOG_DEBUG("AP " << apInfo.m_bssid << " does not advertise our SSID " << apSsid
                                << "  " << m_scanParams.ssid);
+            NS_LOG_INFO("AP " << apInfo.m_bssid << " does not advertise our SSID " << apSsid
+                               << "  " << m_scanParams.ssid);
             return false;
         }
     }
@@ -158,6 +175,7 @@ WifiAssocManager::MatchScanParams(const StaWifiMac::ApInfo& apInfo) const
                      channelMatch) == m_scanParams.channelList[apInfo.m_linkId].cend())
     {
         NS_LOG_DEBUG("AP " << apInfo.m_bssid << " is not operating on a requested channel");
+        NS_LOG_INFO("AP " << apInfo.m_bssid << " is not operating on a requested channel");
         return false;
     }
 
@@ -193,7 +211,7 @@ WifiAssocManager::StartScanning(WifiScanParams&& scanParams)
 void
 WifiAssocManager::StartScanningOnLink(uint8_t linkId, WifiScanParams&& scanParams)
 {
-    NS_LOG_FUNCTION(this);
+    NS_LOG_FUNCTION(this << linkId);
 
     // remove stored AP information corresponding to the operating band of the given link
     for (auto ap = m_apList.begin(); ap != m_apList.end();)
@@ -201,7 +219,8 @@ WifiAssocManager::StartScanningOnLink(uint8_t linkId, WifiScanParams&& scanParam
         bool matchingBand = false;
         for (const auto& channel : scanParams.channelList[0])
         {
-            if (channel.band == ap->m_channel.band)
+            NS_LOG_INFO("AP "<< ap->m_bssid << " is in band " << ap->m_channel.band);
+            if (channel.band == WifiPhyBand(ap->m_channel.band))
             {
                 matchingBand = true;
                 break;
@@ -211,6 +230,7 @@ WifiAssocManager::StartScanningOnLink(uint8_t linkId, WifiScanParams&& scanParam
         if (matchingBand)
         {
             // remove AP info from list
+            NS_LOG_INFO("Erasing old AP " << ap->m_bssid);
             m_apListIt.erase(ap->m_bssid);
             ap = m_apList.erase(ap);
         }
@@ -228,6 +248,7 @@ WifiAssocManager::NotifyApInfo(const StaWifiMac::ApInfo&& apInfo)
 {
     NS_LOG_FUNCTION(this << apInfo);
 
+    
     if (!CanBeInserted(apInfo) || !MatchScanParams(apInfo) ||
         (!m_allowedLinks.empty() && !m_allowedLinks.contains(apInfo.m_linkId)))
     {
@@ -271,7 +292,7 @@ WifiAssocManager::ScanningTimeout()
             m_mac->ScanningTimeout(std::nullopt);
             return;
         }
-        NS_LOG_INFO("m_apListIt size : " << m_apListIt.size());
+    
         std::list<StaWifiMac::ApInfo> apInfoList;
         for (auto ap = m_apList.begin(); ap != m_apList.end(); ++ap)
         {
@@ -281,6 +302,7 @@ WifiAssocManager::ScanningTimeout()
             }
             apInfoList.push_back(*ap);
         } 
+        NS_LOG_INFO("apInfoList size : " << apInfoList.size());
         m_mac->ScanningTimeoutMultiAp(apInfoList);
     }
     else
@@ -472,5 +494,12 @@ WifiAssocManager::GetAllAffiliatedAps(const ReducedNeighborReport& rnr)
     return apList;
 }
 
+bool 
+WifiAssocManager::IsWaitBeaconEventPending(uint8_t linkId) const
+{
+    NS_LOG_FUNCTION(this << +linkId);
+    
+    return false;
+}
 
 } // namespace ns3
