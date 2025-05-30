@@ -820,8 +820,8 @@ main(int argc, char* argv[])
     std::string outputDir = "./scratch/wifi-ehr-static-scenario/";
     Time simulationTime{"3s"};
     uint16_t numBss = 4;
-    std::vector<uint16_t> numApsPerBss = {2, 3, 3, 3}; 
-    uint32_t seed = 50;
+    std::vector<uint16_t> numApsPerBss = {3, 3, 3, 3}; 
+    uint32_t seed = 16;
 
     // Wifi Simulation Parameters
     bool udp{true};
@@ -846,7 +846,7 @@ main(int argc, char* argv[])
     std::string dlAckSeqType{"ACK-SU-FORMAT"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
     bool enableUlOfdma{false};
     bool enableBsrp{false};
-    int mcs{0}; // -1 indicates an unset value
+    int mcs{-1}; // -1 indicates an unset value
     uint32_t payloadSize =
         1474; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
     Time tputInterval{0}; // interval for detailed throughput measurement

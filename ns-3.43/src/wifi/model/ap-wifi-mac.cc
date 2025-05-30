@@ -455,6 +455,7 @@ ApWifiMac::Enqueue(Ptr<WifiMpdu> mpdu, Mac48Address to, Mac48Address from)
         NS_ASSERT(txop);
         
         NS_LOG_INFO("[mac=" << GetAddress() << "] Queueing mpdu from " << from << " to " << to);
+        // std::cout << "[mac=" << GetAddress() << "] Queueing mpdu from " << from << " to " << to << std::endl;
         txop->Queue(mpdu);
 
         // create another MPDU if needed

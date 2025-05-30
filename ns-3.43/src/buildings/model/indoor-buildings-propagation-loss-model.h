@@ -48,6 +48,8 @@ public:
 
     void SetFrequency(double frequency);
 
+    void SetWallLoss(double loss);
+
     double InternalWallsLoss(Ptr<MobilityBuildingInfo> a, Ptr<MobilityBuildingInfo> b) const;
 
 protected:

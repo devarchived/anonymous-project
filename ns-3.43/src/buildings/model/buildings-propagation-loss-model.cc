@@ -86,7 +86,7 @@ BuildingsPropagationLossModel::GetTypeId()
 
             .AddAttribute("InternalWallLoss",
                           "Additional loss for each internal wall [dB]",
-                          DoubleValue(9.0),
+                          DoubleValue(5.0),
                           MakeDoubleAccessor(&BuildingsPropagationLossModel::m_lossInternalWall),
                           MakeDoubleChecker<double>());
 

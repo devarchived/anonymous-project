@@ -659,8 +659,9 @@ StaWifiMac::SendAssociationRequest(bool isReassoc)
             uint8_t linkId = it->first;
             auto& link = GetLink(linkId);
             NS_LOG_INFO("LinkId : " << +linkId << " has BSSID " << *link.bssid);
-            NS_ABORT_MSG_IF(!link.bssid.has_value(),
-                    "No BSSID set for the link on which the (Re)Association Request is to be sent");
+            
+            // NS_ABORT_MSG_IF(!link.bssid.has_value(),
+            //         "No BSSID set for the link on which the (Re)Association Request is to be sent");
 
             NS_LOG_FUNCTION(this << *link.bssid << isReassoc);
             WifiMacHeader hdr;
@@ -748,6 +749,7 @@ StaWifiMac::SendAssociationRequest(bool isReassoc)
                         "No link selected to send the (Re)Association Request");
         uint8_t linkId = it->first;
         auto& link = GetLink(linkId);
+        
         NS_ABORT_MSG_IF(!link.bssid.has_value(),
                         "No BSSID set for the link on which the (Re)Association Request is to be sent");
 
@@ -1448,6 +1450,9 @@ StaWifiMac::DisassociatedOnLink(uint8_t linkId)
         SetState(UNASSOCIATED);
         m_deAssocLogger(apAddr);
         m_newDeAssocLogger(GetAddress(), apAddr);
+
+        m_aid = 0;
+        m_linkDown();
     }
 
     StartScanningOnLink(linkId);

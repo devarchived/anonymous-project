@@ -554,7 +554,7 @@ main(int argc, char* argv[])
     // General parameters
     std::string layoutDir = "./scratch/wifi-eht-static-scenario/";
     std::string outputDir = "./scratch/wifi-eht-static-scenario/";
-    Time simulationTime{"2s"};
+    Time simulationTime{"3s"};
     uint16_t numBss = 4;
     uint32_t seed = 16;
 
@@ -579,7 +579,7 @@ main(int argc, char* argv[])
     dBm_u minimumRssi{-82};
     int channelWidth = 20;
     int gi = 3200;
-    std::string dlAckSeqType{"ACK-SU-FORMAT"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
+    std::string dlAckSeqType{"NO-OFDMA"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
     bool enableUlOfdma{false};
     bool enableBsrp{false};
     int mcs{-1}; // -1 indicates an unset value

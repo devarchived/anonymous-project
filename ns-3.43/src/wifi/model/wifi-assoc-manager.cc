@@ -227,17 +227,18 @@ WifiAssocManager::StartScanningOnLink(uint8_t linkId, WifiScanParams&& scanParam
             }
         }
 
-        if (matchingBand)
-        {
-            // remove AP info from list
-            NS_LOG_INFO("Erasing old AP " << ap->m_bssid);
-            m_apListIt.erase(ap->m_bssid);
-            ap = m_apList.erase(ap);
-        }
-        else
-        {
-            ++ap;
-        }
+        // if (matchingBand)
+        // {
+        //     // remove AP info from list
+        //     NS_LOG_INFO("Erasing old AP " << ap->m_bssid);
+        //     m_apListIt.erase(ap->m_bssid);
+        //     ap = m_apList.erase(ap);
+        // }
+        // else
+        // {
+        //     ++ap;
+        // }
+        ++ap;
     }
 
     DoStartScanningOnLink(linkId);

@@ -545,6 +545,8 @@ WifiNetDevice::ForwardUp(Ptr<const Packet> packet, Mac48Address from, Mac48Addre
 void
 WifiNetDevice::LinkUp()
 {
+    NS_LOG_FUNCTION(this << m_mac->GetAddress());
+
     m_linkUp = true;
     m_linkChanges();
 }
@@ -552,6 +554,8 @@ WifiNetDevice::LinkUp()
 void
 WifiNetDevice::LinkDown()
 {
+    NS_LOG_FUNCTION(this << m_mac->GetAddress());
+
     m_linkUp = false;
     m_linkChanges();
 }
@@ -573,7 +577,7 @@ WifiNetDevice::DoSend(Ptr<Packet> packet,
                       uint16_t protocolNumber)
 {
     NS_LOG_FUNCTION(this << packet << dest << protocolNumber << source.value_or(Address()));
-
+    NS_LOG_INFO("WifiNetDevice::DoSend MACAddress : " <<  m_mac->GetAddress());
     if (source)
     {
         NS_ASSERT_MSG(Mac48Address::IsMatchingType(*source),

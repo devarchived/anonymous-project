@@ -792,18 +792,19 @@ int main(int argc, char *argv[])
     // Simulation parameters
     uint32_t numNodes = 1; // Number of nodes
     uint32_t seed = 75;    // Random seed
-    Time simulationTime{"20s"};
+    Time simulationTime{"100s"};//{"100s"};
     uint16_t numBss = 1;
     std::vector<uint16_t> numApsPerBss = {4};
     std::string currentDir = "./scratch/wifi-eht-roaming-scenario/";
     std::string roomLayoutDir = currentDir + "walls-assignment.txt";
     std::string apLayoutDir = currentDir + "ap-positions.txt";
-    std::string waypointDir = currentDir + "random-waypoints.txt";
+    std::string waypointDir = currentDir + "random-human-waypoints.txt";//"random-human-waypoints.txt";
 
     // create a grid of buildings
     double factorySizeX = 20; // m
     double factorySizeY = 20;  // m
     double factoryHeight = 3; // m
+    double wallLoss = 9; // dB
 
     // Wifi Simulation Parameters
     bool udp{true};
@@ -826,17 +827,18 @@ int main(int argc, char *argv[])
     dBm_u minimumRssi{-82};
     int channelWidth = 20;
     int gi = 3200;
-    std::string dlAckSeqType{"ACK-SU-FORMAT"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
+    std::string dlAckSeqType{"NO-OFDMA"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
     bool enableUlOfdma{false};
     bool enableBsrp{false};
-    int mcs{0}; // -1 indicates an unset value
+    int mcs{-1}; // -1 indicates an unset value
     uint32_t payloadSize =
-        1474; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
+        1474;//1474; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
     Time tputInterval{0}; // interval for detailed throughput measurement
     double poissonLambda = 0;
     double minExpectedThroughput{0};
     double maxExpectedThroughput{0};
     Time accessReqInterval{0};
+    uint32_t maxMissedBeacons = 2;
     bool enablePoisson = true;
     bool printOutput = false;
 
@@ -903,6 +905,9 @@ int main(int argc, char *argv[])
     cmd.AddValue("poissonLambda",
                 "Arrival rate of the poisson traffic",
                 poissonLambda);
+    cmd.AddValue("maxMissedBeacons",
+                "Maximum missed beacons before disassociation",
+                maxMissedBeacons);
     cmd.AddValue("seed",
                 "rng seed number",
                 seed);
@@ -1115,10 +1120,13 @@ int main(int argc, char *argv[])
     auto spectrumChannel2_4 = CreateObject<MultiModelSpectrumChannel>();
     auto lossModel5 = CreateObject<IndoorBuildingsPropagationLossModel>();
     lossModel5->SetBuildingType(Building::Office);
+    lossModel5->SetWallLoss(wallLoss);
     auto lossModel6 = CreateObject<IndoorBuildingsPropagationLossModel>();
     lossModel6->SetBuildingType(Building::Office);
+    lossModel6->SetWallLoss(wallLoss);
     auto lossModel2_4 = CreateObject<IndoorBuildingsPropagationLossModel>();
     lossModel2_4->SetBuildingType(Building::Office);
+    lossModel2_4->SetWallLoss(wallLoss);
     spectrumChannel5->AddPropagationLossModel(lossModel5);
     spectrumChannel6->AddPropagationLossModel(lossModel6);
     spectrumChannel2_4->AddPropagationLossModel(lossModel2_4);
@@ -1153,7 +1161,8 @@ int main(int argc, char *argv[])
     phy.Set("CcaEdThreshold", DoubleValue(ccaEdTr));
     phy.Set("RxSensitivity", DoubleValue(-92.0));
 
-    mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid));
+    mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid),
+                "MaxMissedBeacons", UintegerValue(maxMissedBeacons));
     staDevices.Add(wifi.Install(phy, mac, wifiStaNodes));
 
     mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
@@ -1344,23 +1353,23 @@ int main(int argc, char *argv[])
     // Simulation clock
     Simulator::Schedule (MicroSeconds (100), &TimePasses);
 
-    // Schedule the pathloss calculation callback
-    for (uint32_t linkId = 0; linkId < nLinks; linkId++)
-    {
-        if (findSubstring(channelStr[linkId],"5GHZ"))
-        {
-            Simulator::Schedule(Seconds(0), &MonitorPathLoss, linkId, lossModel5, wifiApNodes, wifiStaNodes);
-        }
-        else if (findSubstring(channelStr[linkId],"6GHZ"))
-        {
+    // // Schedule the pathloss calculation callback
+    // for (uint32_t linkId = 0; linkId < nLinks; linkId++)
+    // {
+    //     if (findSubstring(channelStr[linkId],"5GHZ"))
+    //     {
+    //         Simulator::Schedule(Seconds(0), &MonitorPathLoss, linkId, lossModel5, wifiApNodes, wifiStaNodes);
+    //     }
+    //     else if (findSubstring(channelStr[linkId],"6GHZ"))
+    //     {
             
-            Simulator::Schedule(Seconds(0), &MonitorPathLoss, linkId, lossModel6, wifiApNodes, wifiStaNodes);
-        }
-        else if (findSubstring(channelStr[linkId],"2_4GHZ"))
-        {
-            Simulator::Schedule(Seconds(0), &MonitorPathLoss, linkId, lossModel2_4, wifiApNodes, wifiStaNodes);
-        }
-    }
+    //         Simulator::Schedule(Seconds(0), &MonitorPathLoss, linkId, lossModel6, wifiApNodes, wifiStaNodes);
+    //     }
+    //     else if (findSubstring(channelStr[linkId],"2_4GHZ"))
+    //     {
+    //         Simulator::Schedule(Seconds(0), &MonitorPathLoss, linkId, lossModel2_4, wifiApNodes, wifiStaNodes);
+    //     }
+    // }
 
     // Enable the traces
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/NewAssoc", MakeCallback(&AssocTrace));

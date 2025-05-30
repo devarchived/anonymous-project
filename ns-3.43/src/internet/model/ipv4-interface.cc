@@ -250,6 +250,7 @@ Ipv4Interface::Send(Ptr<Packet> p, const Ipv4Header& hdr, Ipv4Address dest)
         bool found = false;
         if (dest.IsBroadcast())
         {
+            NS_LOG_INFO("Debug 7");
             NS_LOG_LOGIC("All-network Broadcast");
             hardwareDestination = m_device->GetBroadcast();
             found = true;
@@ -272,6 +273,7 @@ Ipv4Interface::Send(Ptr<Packet> p, const Ipv4Header& hdr, Ipv4Address dest)
             {
                 if (dest.IsSubnetDirectedBroadcast((*i).GetMask()))
                 {
+                    NS_LOG_INFO("Debug 8");
                     NS_LOG_LOGIC("Subnetwork Broadcast");
                     hardwareDestination = m_device->GetBroadcast();
                     found = true;
@@ -280,6 +282,7 @@ Ipv4Interface::Send(Ptr<Packet> p, const Ipv4Header& hdr, Ipv4Address dest)
             }
             if (!found)
             {
+                NS_LOG_INFO("Debug 9");
                 NS_LOG_LOGIC("ARP Lookup");
                 found = arp->Lookup(p, hdr, dest, m_device, m_cache, &hardwareDestination);
             }

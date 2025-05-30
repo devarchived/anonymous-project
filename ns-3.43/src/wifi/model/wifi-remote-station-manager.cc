@@ -573,7 +573,10 @@ WifiRemoteStationManager::GetAffiliatedStaAddress(const Mac48Address& mldAddress
         return std::nullopt;
     }
 
+    // std::cout << "stateIt->second->m_mleCommonInfo->m_mldMacAddress : " << stateIt->second->m_mleCommonInfo->m_mldMacAddress << std::endl;
+    // std::cout << "mldAddress : " << mldAddress << std::endl;
     NS_ASSERT(stateIt->second->m_mleCommonInfo->m_mldMacAddress == mldAddress);
+
     return stateIt->second->m_address;
 }
 

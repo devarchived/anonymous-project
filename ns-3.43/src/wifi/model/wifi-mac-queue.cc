@@ -241,6 +241,7 @@ WifiMacQueue::Insert(ConstIterator pos, Ptr<WifiMpdu> item)
     }
 
     NS_LOG_INFO("Queue is full");
+
     // the queue is full; try to make some room by removing stale packets
     auto queueId = WifiMacQueueContainer::GetQueueId(item);
 

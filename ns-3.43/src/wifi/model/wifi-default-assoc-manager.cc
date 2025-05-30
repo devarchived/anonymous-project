@@ -147,7 +147,7 @@ WifiDefaultAssocManager::EndScanning()
     // If multi-link setup is not possible, just call ScanningTimeout() and return
     if (!CanSetupMultiLink(mle, rnr) || (apList = GetAllAffiliatedAps(*rnr)).empty())
     {   
-        if (GetSortedList().size() > 1 && m_mac->MultiApCoordinationEnabled())
+        if (GetSortedList().size() > 0 && m_mac->MultiApCoordinationEnabled())
         {
             NS_LOG_INFO("Size of the apList : " << GetSortedList().size());
             

@@ -164,4 +164,10 @@ IndoorBuildingsPropagationLossModel::InternalWallsLoss(Ptr<MobilityBuildingInfo>
     }   
 }
 
+void 
+IndoorBuildingsPropagationLossModel::SetWallLoss(double loss)
+{
+    m_lossInternalWall = loss;
+}
+
 } // namespace ns3
