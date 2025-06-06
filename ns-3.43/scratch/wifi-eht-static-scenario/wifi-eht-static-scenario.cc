@@ -58,6 +58,7 @@ typedef struct Analysis
     std::map<uint64_t,Time> macTxMap;
     std::map<std::pair<uint64_t, Mac48Address>, Time> macTxMapReliability;
     std::map<uint64_t,Time> macRxMap;
+    std::map<uint64_t,Time> macAckMap;
     std::map<uint64_t,uint64_t> retransmitTxMap;
     std::map<std::pair<uint64_t, Mac48Address>, uint64_t> retransmitTxMapReliability;
     std::map<uint64_t,Time> dropTxMap;
@@ -65,6 +66,7 @@ typedef struct Analysis
     std::map<uint64_t,Time> chGrantedTxMap;
     uint64_t rxPackets{0};
     uint64_t txPackets{0};
+    uint64_t ackPackets{0};
     uint64_t phyRxPackets{0};
     uint64_t phyTxPackets{0};
     uint64_t dropPackets{0};
@@ -401,6 +403,38 @@ MacRxWithAddressTrace(std::string context, Mac48Address rxMacAddress,Ptr<const P
 }
 
 void
+MacAckTrace(std::string context,Ptr<const WifiMpdu> mpdu)
+{
+    auto p = mpdu->GetProtocolDataUnit();
+    WifiMacHeader hdr;
+    p->PeekHeader(hdr);
+
+    for (uint16_t i = 0; i < m_staDevices.GetN(); i++)
+    {
+        Ptr<WifiNetDevice> wifiStaDev = DynamicCast<WifiNetDevice>(m_staDevices.Get(i));
+        for (uint8_t linkId = 0; linkId < wifiStaDev->GetMac()->GetNLinks(); linkId++)
+        {
+            if(hdr.GetAddr1() == wifiStaDev->GetMac()->GetFrameExchangeManager(linkId)->GetAddress() || (hdr.GetAddr1() == wifiStaDev->GetMac()->GetAddress()))
+            {
+                uint64_t packetUid = p->GetUid();
+                if (g_verbose)
+                {
+                    std::cout << Simulator::Now().As(Time::US) << " MAC ACK p: " << packetUid << std::endl;
+                }
+
+                Analysis& staAnalysis = analysisMap[wifiStaDev->GetMac()->GetAddress()];
+                        
+                if (!m_reliabilityMode || staAnalysis.macAckMap.find(packetUid) == staAnalysis.macAckMap.end()) 
+                {
+                    staAnalysis.macAckMap[packetUid] = Simulator::Now();
+                }
+                staAnalysis.ackPackets++;
+            }
+        }
+    }
+}
+
+void
 DroppedMpduTrace(std::string context, Mac48Address txMacAddress,Ptr<const Packet> p)
 {
     WifiMacHeader hdr;
@@ -535,15 +569,19 @@ CalculateChAccessDelay(uint64_t& chAccessCount, Time& sumChAccessDelay, const st
 
         if (txPackets != txMap.end())
         {
+            Time chAccessTime = chGrantedPackets->second - chReqPackets->second;
+            Time chAcessDelay;
             if (chReqPackets == chReqMap.end())
             {
                 chAccessCount++;
+                // std::cout << "Debug chAccessTime: " << chAccessTime.As(Time::S) << std::endl;
+                chAcessDelay = rxPackets.second - txPackets->second;
             }
-            Time chAccessTime = chGrantedPackets->second - chReqPackets->second;
-            chAccessTime = std::max(chAccessTime, Time("0s"));
-        
-            Time chAcessDelay = rxPackets.second - txPackets->second + chAccessTime;
-            // Time chAcessDelay = rxPackets.second - txPackets->second;
+            else
+            {
+                chAccessTime = std::max(chAccessTime, Time("0s"));
+                chAcessDelay = rxPackets.second - txPackets->second + chAccessTime;
+            }
             sumChAccessDelay += chAcessDelay;
         }
     }
@@ -554,9 +592,10 @@ main(int argc, char* argv[])
     // General parameters
     std::string layoutDir = "./scratch/wifi-eht-static-scenario/";
     std::string outputDir = "./scratch/wifi-eht-static-scenario/";
-    Time simulationTime{"3s"};
+    Time simulationTime{"2s"};
     uint16_t numBss = 4;
-    uint32_t seed = 16;
+    uint32_t seed = 5;
+    bool errChannel = false;
 
     // Wifi Simulation Parameters
     bool udp{true};
@@ -586,7 +625,7 @@ main(int argc, char* argv[])
     uint32_t payloadSize =
         1474; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
     Time tputInterval{0}; // interval for detailed throughput measurement
-    double poissonLambda = 0;
+    double poissonLambda = 500;
     double minExpectedThroughput{0};
     double maxExpectedThroughput{0};
     Time accessReqInterval{0};
@@ -656,6 +695,9 @@ main(int argc, char* argv[])
     cmd.AddValue("frameAggregation",
                 "Enable frame aggregation",
                 frameAggregation);
+    cmd.AddValue("errChannel",
+                "Simulates an error-prone channel",
+                errChannel);
     cmd.AddValue("printOutput",
                 "Print results to file",
                 printOutput);
@@ -869,9 +911,24 @@ main(int argc, char* argv[])
     spectrumChannel6->AddPropagationLossModel(lossModel6);
     spectrumChannel2_4->AddPropagationLossModel(lossModel2_4);
     
-    // lossModel2_4->SetMinLoss(200);
-    // lossModel5->SetMinLoss(200);
-    // lossModel6->SetMinLoss(200);
+    if (errChannel)
+    {
+        Ptr<UniformRandomVariable> errRng = CreateObject<UniformRandomVariable>();
+        errRng->SetStream(seed);
+        auto errInd = errRng->GetInteger(0, 2);
+        if (errInd == 0)
+        {
+            lossModel2_4->SetMinLoss(200);
+        }
+        else if (errInd == 1)
+        {
+            lossModel5->SetMinLoss(200);
+        }
+        else
+        {
+            lossModel6->SetMinLoss(200);
+        }
+    }
 
     SpectrumWifiPhyHelper phy(nLinks);
     phy.SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
@@ -1048,6 +1105,7 @@ main(int argc, char* argv[])
     // Enable tracing
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTxWithAddress", MakeCallback(&MacTxWithAddressTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRxWithAddress", MakeCallback(&MacRxWithAddressTrace));
+    Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/AckedMpdu", MakeCallback(&MacAckTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phys/*/PhyTxBegin",MakeCallback(&PhyTxTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phys/*/PhyRxEnd",MakeCallback(&PhyRxTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/FrameExchangeManagers/*/FemMpduDropped",MakeCallback(&DroppedMpduTrace));
@@ -1075,11 +1133,12 @@ main(int argc, char* argv[])
         std::cout << "Phy Tx Packets : " << analysis.phyTxPackets << std::endl;
         std::cout << "Rx Packets : " << analysis.rxPackets << std::endl;
         std::cout << "Phy Rx Packets : " << analysis.phyRxPackets << std::endl;
+        std::cout << "Ack Packets : " << analysis.macAckMap.size() << std::endl;
         std::cout << "Drop Packets : " << analysis.dropTxMap.size() << std::endl;
         std::cout << "Retransmitted Packets : " <<  analysis.retransmitTxMap.size()  << std::endl;
         
         // Throughput
-        auto throughput = (double) (analysis.rxPackets * 8 * payloadSize) / simulationTime.GetMicroSeconds();
+        auto throughput = (double) (analysis.macAckMap.size() * 8 * payloadSize) / simulationTime.GetMicroSeconds();
         sumThroughput += throughput;
         
         //Reliability
@@ -1088,15 +1147,14 @@ main(int argc, char* argv[])
         double txReliability;
         txReliability = 1 - (double) analysis.retransmitTxMap.size()/std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());
         dropReliability = 1 - (double) analysis.dropTxMap.size()/std::min(analysis.phyTxPackets,analysis.txPackets);
-        reliability = (double) analysis.phyRxMap.size()/std::max(analysis.phyTxMap.size(),analysis.macTxMap.size()); //analysis.rxPackets/std::min(analysis.phyTxPackets,analysis.txPackets);
-        
+        reliability = (double) analysis.macAckMap.size()/analysis.macTxMap.size();
         sumReliability += reliability;
         sumDropReliabilty += dropReliability;
         sumTxReliability += txReliability;
 
         //Delay
-        CalculateChAccessDelay(analysis.chAccessCount, analysis.sumChAccessDelay, analysis.phyTxMap, analysis.phyRxMap, analysis.chReqTxMap, analysis.chGrantedTxMap);
-        CalculateE2EDelay(analysis.sumDelay, analysis.macTxMap, analysis.macRxMap);
+        CalculateChAccessDelay(analysis.chAccessCount, analysis.sumChAccessDelay, analysis.phyTxMap, analysis.macAckMap, analysis.chReqTxMap, analysis.chGrantedTxMap);
+        CalculateE2EDelay(analysis.sumDelay, analysis.macTxMap, analysis.macAckMap);
         
         analysis.avgChAccessDelay = analysis.sumChAccessDelay/(analysis.phyRxMap.size()-analysis.chAccessCount);
         sumChAccessDelay += analysis.avgChAccessDelay;

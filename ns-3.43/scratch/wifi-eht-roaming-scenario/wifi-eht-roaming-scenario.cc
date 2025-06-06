@@ -792,7 +792,7 @@ int main(int argc, char *argv[])
     // Simulation parameters
     uint32_t numNodes = 1; // Number of nodes
     uint32_t seed = 75;    // Random seed
-    Time simulationTime{"100s"};//{"100s"};
+    Time simulationTime{"100"};//{"100s"};
     uint16_t numBss = 1;
     std::vector<uint16_t> numApsPerBss = {4};
     std::string currentDir = "./scratch/wifi-eht-roaming-scenario/";
@@ -804,7 +804,7 @@ int main(int argc, char *argv[])
     double factorySizeX = 20; // m
     double factorySizeY = 20;  // m
     double factoryHeight = 3; // m
-    double wallLoss = 9; // dB
+    double wallLoss = 5; // dB
 
     // Wifi Simulation Parameters
     bool udp{true};
@@ -812,7 +812,7 @@ int main(int argc, char *argv[])
     bool useRts{false};
     bool frameAggregation{false};
     bool use80Plus80{false};
-    uint16_t mpduBufferSize{512};
+    uint16_t mpduBufferSize{1024};
     std::string emlsrLinks;//="0,1,2";
     std::vector<double> freqBands = {2.4,5,6};//{2.4,5,6};
     uint16_t paddingDelayUsec{32};
@@ -834,11 +834,11 @@ int main(int argc, char *argv[])
     uint32_t payloadSize =
         1474;//1474; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
     Time tputInterval{0}; // interval for detailed throughput measurement
-    double poissonLambda = 0;
+    double poissonLambda = 5000;
     double minExpectedThroughput{0};
     double maxExpectedThroughput{0};
     Time accessReqInterval{0};
-    uint32_t maxMissedBeacons = 2;
+    uint32_t maxMissedBeacons = 3;
     bool enablePoisson = true;
     bool printOutput = false;
 

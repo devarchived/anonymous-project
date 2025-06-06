@@ -812,7 +812,7 @@ int main(int argc, char *argv[])
     bool useRts{false};
     bool frameAggregation{false};
     bool use80Plus80{false};
-    uint16_t mpduBufferSize{512};
+    uint16_t mpduBufferSize{1024};
     std::vector<double> freqBands = {2.4,5,6};//{2.4,5,6};
     uint16_t paddingDelayUsec{32};
     uint16_t transitionDelayUsec{128};
@@ -833,11 +833,11 @@ int main(int argc, char *argv[])
     uint32_t payloadSize =
         1474;//1474; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
     Time tputInterval{0}; // interval for detailed throughput measurement
-    double poissonLambda = 0;
+    double poissonLambda = 1000;
     double minExpectedThroughput{0};
     double maxExpectedThroughput{0};
     Time accessReqInterval{0};
-    uint32_t maxMissedBeacons = 2;
+    uint32_t maxMissedBeacons = 3;
     bool enableMultiApCoordinationMaster = true;
     bool reliabilityModeMaster = false;
     bool enablePoisson = true;
@@ -1628,8 +1628,8 @@ int main(int argc, char *argv[])
             txReliability = 1 - (double) (analysis.retransmitTxMap.size()-firstTxCount)/ std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());
             dropReliability = 1 - (double) CalculateAllDropReliability(nLinksSta[it],analysis.dropTxMapReliability)/ std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());
             reliability = (double) analysis.phyRxMap.size()/std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());//analysis.macRxMap.size()/std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());
-            // CalculateReliabilityChAccessDelay(analysis.chAccessCount, analysis.sumChAccessDelay, analysis.phyTxMapReliability, analysis.phyRxMap, analysis.chReqTxMapReliability, analysis.chGrantedTxMapReliability);
-            // CalculateReliabilityE2EDelay(analysis.sumDelay, analysis.macTxMapReliability, analysis.macRxMap);
+            CalculateReliabilityChAccessDelay(analysis.chAccessCount, analysis.sumChAccessDelay, analysis.phyTxMapReliability, analysis.phyRxMap, analysis.chReqTxMapReliability, analysis.chGrantedTxMapReliability);
+            CalculateReliabilityE2EDelay(analysis.sumDelay, analysis.macTxMapReliability, analysis.macRxMap);
         }
         else
         {

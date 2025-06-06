@@ -50,16 +50,19 @@ def calculate_tau(p, tau, w_0, m, M, n_obss, p_f):
     tau_new = numerator / denominator
     return tau_new
 
-def calculate_p_ei(tau, n_obss):
+ef calculate_p_ei(tau, n_obss):
     p_ei = (1-tau)**(n_obss-1)
+    print("Debug p_ei", p_ei)
     return p_ei
 
 def calculate_p_es(tau, n_obss):
     p_es = scipy.special.comb(n_obss-1, 1)*tau*((1-tau)**(n_obss-2))
+    print("Debug p_es", p_es)
     return p_es
 
 def calculate_p_ec(p_ei, p_es):
     p_ec = 1 - p_ei - p_es
+    print("Debug p_ec", p_ec)
     return p_ec
 
 def calculate_p_ss(w_0):
@@ -88,28 +91,39 @@ def calculate_p_ci(n_obss, tau, mean_cw):
     p_ci = 0
     for i in range(2,n_obss):
         p_ci += calculate_pmf_n(n_obss, i, tau)*((1-1/mean_cw)**(i))
+
+    # print('p_ci', p_ci)
     return p_ci
 
 def calculate_p_cs(n_obss, tau, mean_cw):
     p_cs = 0
     for i in range(2,n_obss):
         p_cs += calculate_pmf_n(n_obss, i, tau)*i*(1/mean_cw)*(1-1/mean_cw)**(i-1)
+
+    # print('p_cs', p_cs)
     return p_cs
 
-def calculate_p_cc(p_ci, p_cs):
-    p_cc = 1 - p_ci - p_cs
-    return p_cc
+def calculate_p_cc(n_obss, p_ci, p_cs):
+    if n_obss > 2 :
+        p_cc = 1 - p_ci - p_cs
+        # print("Debug p_cc", p_cc)
+        return p_cc
+    else : 
+        return 0
 
 def calculate_p_S(p_ss, p_es, p_cs):
     p_S = p_ss + p_es + p_cs
+    print("Debug p_S", p_S)
     return p_S
 
 def calculate_p_C(p_cc, p_ec):
     p_C = p_cc + p_ec
+    print("Debug p_C", p_C)
     return p_C
 
 def calculate_p_I(p_ei, p_ci, p_si):
     p_I = p_ei + p_ci + p_si
+    print("Debug p_I", p_I)
     return p_I
 
 def calculate_decrement_probability(p_I):
@@ -158,14 +172,14 @@ def calculate_reliability(p, M):
     """Calculate the reliability."""
     return 1 - np.power(p, M+1)
 
-def calculate_t_I ():
-    return 1
+def calculate_t_I (slot_size):
+    return slot_size
 
 def calculate_t_S (p_ss, t_success, t_I):
     t_S = 1/(1-p_ss)*t_success + t_I
     return t_S
 
-def calculate_t_C (p_cs, p_ci, p_cc, t_collision, t_S):
+def calculate_t_C (p_cs, p_ci, p_cc, t_collision, t_S, t_I, M):
     sum_coll_time = 0
     for i in range(M+1):
         sum_coll_time += i*(p_cc)**i
@@ -178,7 +192,7 @@ def calculate_t_C (p_cs, p_ci, p_cc, t_collision, t_S):
 
     return t_C
 
-def calculate_sigma_b(p_ei, p_es, p_ec, p_ss, p_si, p_ci, p_cs, p_cc, t_I, t_S, t_C):
+def calculate_sigma_b(p_ei, p_es, p_ec, p_ss, p_si, p_ci, p_cs, p_cc, t_I, t_S, t_C, p_d):
     sigma_b = ((p_ei*t_I) + (p_es*t_S) + (p_ec*t_C))/p_d
     return sigma_b
 
@@ -244,7 +258,7 @@ def run_simulation_for_band(band_params, common_params):
         mean_cw = calculate_average_backoff_window(w_0, m, band_params.n_obss, p)
         p_ci = calculate_p_ci(band_params.n_obss, tau, mean_cw)
         p_cs = calculate_p_cs(band_params.n_obss, tau, mean_cw)
-        p_cc = calculate_p_cc(p_ci, p_cs)
+        p_cc = calculate_p_cc(band_params.n_obss, p_ci, p_cs)
 
         p_S = calculate_p_S(p_ss, p_es, p_cs)
         p_C = calculate_p_C(p_cc, p_ec)
@@ -265,23 +279,38 @@ def run_simulation_for_band(band_params, common_params):
     # Account the channel error probability
 
 
-    # Calculate performance metrics
+    # Calculate state probabilities
     p_collision = calculate_collision_probability(tau, band_params.n_obss)
     print("Collision probability (p_collision): ", p_collision)
     p_transmit = calculate_transmission_probability(tau, band_params.n_obss)
     print("Transmission probability (p_transmit): ", p_transmit)
     p_success = calculate_success_probability(tau, band_params.n_obss)
     print("Success probability (p_success): ", p_success)
+
+    # Calculate timing parameters
     t_success = calculate_success_time(phy_header, mac_header, packet_length, 
                                       band_params.difs, band_params.sifs, ack, prop_delay)
     t_collision = calculate_collision_time(phy_header, mac_header, packet_length, 
                                          band_params.difs, prop_delay)
     t_error = t_success
+    t_I = calculate_t_I (slot_size)
+    t_S = calculate_t_S (p_ss, t_success, t_I)
+    t_C = calculate_t_C (p_cs, p_ci, p_cc, t_collision, t_S, t_I, M)
     
     #stable_data_rate = min(packet_size * 8 * lambda_poisson,data_rate) #No need to use stable data rate in saturated case
+    
+    # Calculate throughput
     throughput = calculate_throughput(band_params.n_obss, p_transmit, p_success, band_params.p_error, packet_length, data_rate, slot_size, t_success, t_collision, t_error)
-    reliability = calculate_reliability(p, m)
-    delay = calculate_delay(p, p_collision, band_params.p_error, m, w_0, slot_size, t_success, t_collision, t_error)
+    
+    # Calculate packet drop reliability
+    reliability = calculate_reliability(p, M)
+
+    # Calculate channel access delay
+    sigma_b = calculate_sigma_b(p_ei, p_es, p_ec, p_ss, p_si, p_ci, p_cs, p_cc, t_I, t_S, t_C, p_d)
+    sigma_t = calculate_sigma_t(p_ei, p_es, p_ec, p_ss, p_si, p_ci, p_cs, p_cc, t_I, t_S, t_C, mean_cw)
+    sigma = calculate_sigma(tau, sigma_b, sigma_t)
+
+    delay = calculate_delay(p, p_collision, band_params.p_error, m, w_0, sigma, t_success, t_collision, t_error)
     print(delay)
     
     return {
