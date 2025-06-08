@@ -567,7 +567,12 @@ CalculateChAccessDelay(uint64_t& chAccessCount, Time& sumChAccessDelay, const st
         auto chReqPackets = chReqMap.find(packetUid);
         auto chGrantedPackets = chGrantedMap.find(packetUid);
 
-        if (txPackets != txMap.end())
+        if (chReqPackets == chReqMap.end())
+        {
+            chAccessCount++;
+        }
+
+        if (txPackets != txMap.end())// && chReqPackets != chReqMap.end())
         {
             Time chAccessTime = chGrantedPackets->second - chReqPackets->second;
             Time chAcessDelay;

@@ -56,7 +56,6 @@ typedef struct Analysis
     std::map<uint64_t,Time> phyTxMap;
     std::map<std::pair<uint64_t, Mac48Address>, Time> phyTxMapReliability;
     std::map<uint64_t,Time> phyRxMap;
-    std::map<uint64_t,Time> phyAckMap;
     std::map<uint64_t,Time> macTxMap;
     std::map<std::pair<uint64_t, Mac48Address>, Time> macTxMapReliability;
     std::map<uint64_t,Time> macRxMap;
@@ -74,7 +73,6 @@ typedef struct Analysis
     uint64_t ackPackets{0};
     uint64_t phyRxPackets{0};
     uint64_t phyTxPackets{0};
-    uint64_t phyAckPackets{0};
     uint64_t dropPackets{0};
     uint64_t retransmitPackets{0};
     uint64_t chAccessCount{0};
@@ -757,7 +755,6 @@ CalculateReliabilityChAccessDelay(uint64_t& chAccessCount, Time& sumChAccessDela
 
         if (maxValidTxTime != Time::Min() && minChAccessTxTime != Time::Max() && minChAccessTxTime.GetSeconds() < 1.0 && minChAccessTxTime.GetSeconds() > 0.0)
         {
-            std::cout << minChAccessTxTime << std::endl;
             Time chAccessDelay = rxTime - maxValidTxTime + minChAccessTxTime;
             sumChAccessDelay += chAccessDelay;
         }
@@ -1585,7 +1582,7 @@ main(int argc, char* argv[])
         }
         else
         {
-            throughput = (double) (analysis.phyRxMap.size() * 8 * payloadSize) / simulationTime.GetMicroSeconds();
+            throughput = (double) (analysis.macAckMap.size() * 8 * payloadSize) / simulationTime.GetMicroSeconds();
         }
         sumThroughput += throughput;
         
@@ -1615,7 +1612,6 @@ main(int argc, char* argv[])
         sumTxReliability += txReliability;
 
         //Delay
-        std::cout << "DEBUG analysis.chAccessCount " << analysis.chAccessCount << std::endl;
         analysis.avgChAccessDelay = analysis.sumChAccessDelay/(analysis.phyRxMap.size()-analysis.chAccessCount);
         sumChAccessDelay += analysis.avgChAccessDelay;
         analysis.avgDelay = analysis.sumDelay/analysis.macRxMap.size();

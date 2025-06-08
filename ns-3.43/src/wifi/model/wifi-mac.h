@@ -1287,11 +1287,7 @@ class WifiMac : public Object
     typedef TracedCallback<Ptr<const WifiMpdu>> MpduTracedCallback;
 
     MpduTracedCallback m_ackedMpduCallback;  ///< ack'ed MPDU callback
-    MpduTracedCallback m_nackedMpduCallback; ///< nack'ed MPDU callback
-
-    // typedef TracedCallback<Mac48Address, Ptr<const WifiMpdu>> NewMpduTracedCallback;
-
-    // NewMpduTracedCallback m_newAckedMpduCallback;  ///< ack'ed MPDU callback
+    MpduTracedCallback m_nackedMpduCallback; ///< nack'ed MPDU callbackk
 
     /**
      * TracedCallback signature for MPDU response timeout events.

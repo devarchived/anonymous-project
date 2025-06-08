@@ -33,6 +33,8 @@
 #include <numeric>
 #include <random>
 #include <map>
+#include <unordered_map>
+#include <algorithm>
 
 using namespace ns3;
 
@@ -56,6 +58,11 @@ bool m_reliabilityMode = false;
 std::map<Mac48Address,Mac48Address>  m_apStaAddressMap;
 NetDeviceContainer m_staDevices;
 
+std::map<uint64_t,Time> m_appTxMap;
+uint64_t m_appTxPackets{0};
+
+uint16_t m_randomSampling = 100;
+
 typedef struct Analysis
 {
     std::map<uint64_t,Time> phyTxMap;
@@ -64,6 +71,7 @@ typedef struct Analysis
     std::map<uint64_t,Time> macTxMap;
     std::map<std::pair<uint64_t, Mac48Address>, Time> macTxMapReliability;
     std::map<uint64_t,Time> macRxMap;
+    std::map<uint64_t,Time> macAckMap;
     std::map<uint64_t,uint64_t> retransmitTxMap;
     std::map<std::pair<uint64_t, Mac48Address>, uint64_t> retransmitTxMapReliability;
     std::map<uint64_t,uint64_t> dropTxMap;
@@ -74,6 +82,7 @@ typedef struct Analysis
     std::map<std::pair<uint64_t, Mac48Address>, Time> chGrantedTxMapReliability;
     uint64_t rxPackets{0};
     uint64_t txPackets{0};
+    uint64_t ackPackets{0};
     uint64_t phyRxPackets{0};
     uint64_t phyTxPackets{0};
     uint64_t dropPackets{0};
@@ -350,6 +359,22 @@ PhyTxTrace(std::string context, Ptr<const Packet> p, double txPowerW)
 }
 
 void
+AppTxTrace(std::string context, Ptr<const Packet> p)
+{
+    uint64_t packetUid = p->GetUid();
+    if (g_verbose)
+    {
+        std::cout << Simulator::Now().As(Time::US) << " APP TX p: " << packetUid << std::endl;
+    }
+    
+    if (!m_reliabilityMode || m_appTxMap.find(packetUid) == m_appTxMap.end()) 
+    {
+        m_appTxMap[packetUid] = Simulator::Now();
+    }
+    m_appTxPackets++;
+}
+
+void
 PhyRxTrace(std::string context, Ptr<const Packet> p)
 {
     WifiMacHeader hdr;
@@ -450,6 +475,38 @@ MacRxWithAddressTrace(std::string context, Mac48Address rxMacAddress,Ptr<const P
                     staAnalysis.macRxMap[packetUid] = Simulator::Now();
                 }
                 staAnalysis.rxPackets++;
+            }
+        }
+    }
+}
+
+void
+MacAckTrace(std::string context,Ptr<const WifiMpdu> mpdu)
+{
+    auto p = mpdu->GetProtocolDataUnit();
+    WifiMacHeader hdr;
+    p->PeekHeader(hdr);
+
+    for (uint16_t i = 0; i < m_staDevices.GetN(); i++)
+    {
+        Ptr<WifiNetDevice> wifiStaDev = DynamicCast<WifiNetDevice>(m_staDevices.Get(i));
+        for (uint8_t linkId = 0; linkId < wifiStaDev->GetMac()->GetNLinks(); linkId++)
+        {
+            if(hdr.GetAddr1() == wifiStaDev->GetMac()->GetFrameExchangeManager(linkId)->GetAddress() || (hdr.GetAddr1() == wifiStaDev->GetMac()->GetAddress()))
+            {
+                uint64_t packetUid = p->GetUid();
+                if (g_verbose)
+                {
+                    std::cout << Simulator::Now().As(Time::US) << " MAC ACK p: " << packetUid << std::endl;
+                }
+
+                Analysis& staAnalysis = analysisMap[wifiStaDev->GetMac()->GetAddress()];
+
+                if (!m_reliabilityMode || staAnalysis.macAckMap.find(packetUid) == staAnalysis.macAckMap.end()) 
+                {
+                    staAnalysis.macAckMap[packetUid] = Simulator::Now();
+                }
+                staAnalysis.ackPackets++;       
             }
         }
     }
@@ -645,8 +702,15 @@ CalculateChAccessDelay(uint64_t& chAccessCount, Time& sumChAccessDelay, const st
 void
 CalculateReliabilityE2EDelay(Time& sumDelay, const std::map<std::pair<uint64_t,Mac48Address>, Time>& txMap, const std::map<uint64_t, Time>& rxMap)
 {
+    uint64_t rxIndex = 0;
     for (const auto& rxPackets : rxMap)
     {
+        if (rxIndex % m_randomSampling != 0) 
+        { 
+            rxIndex++; 
+            continue; 
+        }
+
         uint64_t packetUid = rxPackets.first;
         Time rxTime = rxPackets.second;
         Time maxValidTxTime = Time::Min();
@@ -672,14 +736,22 @@ CalculateReliabilityE2EDelay(Time& sumDelay, const std::map<std::pair<uint64_t,M
             Time e2eDelay = rxTime - sumTxTime/txCount;
             sumDelay += e2eDelay;
         }
+        rxIndex++;
     }
 }
 
 void
 CalculateReliabilityChAccessDelay(uint64_t& chAccessCount, Time& sumChAccessDelay, const std::map<std::pair<uint64_t,Mac48Address>, Time>& txMap, const std::map<uint64_t, Time>& rxMap, const std::map<std::pair<uint64_t,Mac48Address>, Time>& chReqMap, const std::map<std::pair<uint64_t,Mac48Address>, Time>& chGrantedMap)
 {
+    uint64_t rxIndex = 0;
     for (const auto& rxPackets : rxMap)
     {
+        if (rxIndex % m_randomSampling != 0) 
+        { 
+            rxIndex++; 
+            continue; 
+        }
+
         uint64_t packetUid = rxPackets.first;
         Time rxTime = rxPackets.second;
         Time maxValidTxTime = Time::Min();
@@ -718,12 +790,16 @@ CalculateReliabilityChAccessDelay(uint64_t& chAccessCount, Time& sumChAccessDela
             }
         }
 
-        if (maxValidTxTime != Time::Min() && minChAccessTxTime != Time::Max())
+        if (maxValidTxTime != Time::Min() && minChAccessTxTime != Time::Max() && minChAccessTxTime.GetSeconds() < 1.0 && minChAccessTxTime.GetSeconds() > 0.0)
         {
             Time chAccessDelay = rxTime - maxValidTxTime + minChAccessTxTime;
-            // Time chAccessDelay = rxTime - sumTxTime/txCount;
             sumChAccessDelay += chAccessDelay;
         }
+        else
+        {
+            chAccessCount++;
+        }
+        rxIndex++;
     }
 }
 
@@ -792,8 +868,9 @@ int main(int argc, char *argv[])
     // Simulation parameters
     uint32_t numNodes = 1; // Number of nodes
     uint32_t seed = 75;    // Random seed
-    Time simulationTime{"100s"};//{"100s"};
+    Time simulationTime{"80s"};//{"100s"};
     uint16_t numBss = 1;
+    uint16_t randomSampling = 100;
     std::vector<uint16_t> numApsPerBss = {4};
     std::string currentDir = "./scratch/wifi-ehr-roaming-scenario/";
     std::string roomLayoutDir = currentDir + "walls-assignment.txt";
@@ -837,7 +914,7 @@ int main(int argc, char *argv[])
     double minExpectedThroughput{0};
     double maxExpectedThroughput{0};
     Time accessReqInterval{0};
-    uint32_t maxMissedBeacons = 3;
+    uint32_t maxMissedBeacons = 1;
     bool enableMultiApCoordinationMaster = true;
     bool reliabilityModeMaster = false;
     bool enablePoisson = true;
@@ -915,6 +992,9 @@ int main(int argc, char *argv[])
     cmd.AddValue("maxMissedBeacons",
                 "Maximum missed beacons before disassociation",
                 maxMissedBeacons);
+    cmd.AddValue("wallLoss",
+                "Path loss for a wall in dB",
+                wallLoss);
     cmd.AddValue("seed",
                 "rng seed number",
                 seed);
@@ -923,6 +1003,8 @@ int main(int argc, char *argv[])
     LogComponentEnable("WifiEhrRoamingScenario", LOG_LEVEL_FUNCTION);
 
     RngSeedManager::SetSeed(seed);
+
+    m_randomSampling = randomSampling;
 
     if (useRts)
     {
@@ -1571,9 +1653,11 @@ int main(int argc, char *argv[])
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/NewDeAssoc", MakeCallback(&DeAssocTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/LinkAssoc", MakeCallback(&LinkAssocTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/LinkDeAssoc", MakeCallback(&LinkDeAssocTrace));
-
+    
+    Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpClient/Tx", MakeCallback(&AppTxTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacTxWithAddress", MakeCallback(&MacTxWithAddressTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/MacRxWithAddress", MakeCallback(&MacRxWithAddressTrace));
+    Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/AckedMpdu", MakeCallback(&MacAckTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phys/*/PhyTxBegin",MakeCallback(&PhyTxTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Phys/*/PhyRxEnd",MakeCallback(&PhyRxTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/FrameExchangeManagers/*/FemMpduDropped",MakeCallback(&DroppedMpduTrace));
@@ -1599,10 +1683,12 @@ int main(int argc, char *argv[])
     {
         std::cout << "\n=== STA: " << macAddresss << " ===" << std::endl;
         
+        std::cout << "App Tx Packets : " << m_appTxMap.size() << std::endl;
         std::cout << "Tx Packets : " << analysis.txPackets << std::endl;
         std::cout << "Phy Tx Packets : " << analysis.phyTxPackets << std::endl;
         std::cout << "Rx Packets : " << analysis.rxPackets << std::endl;
         std::cout << "Phy Rx Packets : " << analysis.phyRxPackets << std::endl;
+        std::cout << "Ack Packets : " << analysis.macAckMap.size() << std::endl;
         std::cout << "Drop Packets : " << analysis.dropTxMap.size() << std::endl;
         std::cout << "Retransmitted Packets : " <<  analysis.retransmitTxMap.size()  << std::endl;
 
@@ -1614,7 +1700,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            throughput = (double) (analysis.phyRxMap.size() * 8 * payloadSize) / simulationTime.GetMicroSeconds();
+            throughput = (double) (analysis.macAckMap.size() * 8 * payloadSize) / simulationTime.GetMicroSeconds();
         }
         sumThroughput += throughput;
         
@@ -1627,32 +1713,45 @@ int main(int argc, char *argv[])
             auto firstTxCount = CalculateFirstTransmissionReliability(nLinksSta[it],analysis.retransmitTxMapReliability);
             txReliability = 1 - (double) (analysis.retransmitTxMap.size()-firstTxCount)/ std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());
             dropReliability = 1 - (double) CalculateAllDropReliability(nLinksSta[it],analysis.dropTxMapReliability)/ std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());
-            reliability = (double) analysis.phyRxMap.size()/std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());//analysis.macRxMap.size()/std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());
-            CalculateReliabilityChAccessDelay(analysis.chAccessCount, analysis.sumChAccessDelay, analysis.phyTxMapReliability, analysis.phyRxMap, analysis.chReqTxMapReliability, analysis.chGrantedTxMapReliability);
-            CalculateReliabilityE2EDelay(analysis.sumDelay, analysis.macTxMapReliability, analysis.macRxMap);
+            reliability = (double) analysis.macRxMap.size()/m_appTxMap.size();
+            CalculateReliabilityChAccessDelay(analysis.chAccessCount, analysis.sumChAccessDelay, analysis.phyTxMapReliability, analysis.macAckMap, analysis.chReqTxMapReliability, analysis.chGrantedTxMapReliability);
+            CalculateReliabilityE2EDelay(analysis.sumDelay, analysis.macTxMapReliability, analysis.macAckMap);
         }
         else
         {
             txReliability = 1 - (double) analysis.retransmitTxMap.size()/std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());
             dropReliability = 1 - (double) analysis.dropTxMap.size()/std::min(analysis.phyTxPackets,analysis.txPackets);
-            // reliability = (double) analysis.macRxMap.size()/std::max(analysis.phyTxMap.size(),analysis.macTxMap.size());///(double) analysis.macRxMap.size()/std::min(analysis.phyTxMap.size(),analysis.macTxMap.size()); //analysis.rxPackets/std::min(analysis.phyTxPackets,analysis.txPackets);
-            reliability = (double) analysis.phyRxMap.size()/std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());
-            CalculateChAccessDelay(analysis.chAccessCount, analysis.sumChAccessDelay, analysis.phyTxMap, analysis.phyRxMap, analysis.chReqTxMap, analysis.chGrantedTxMap);
-            CalculateE2EDelay(analysis.sumDelay, analysis.macTxMap, analysis.macRxMap);
+            reliability = (double) analysis.macAckMap.size()/m_appTxMap.size();
+            CalculateChAccessDelay(analysis.chAccessCount, analysis.sumChAccessDelay, analysis.phyTxMap, analysis.macAckMap, analysis.chReqTxMap, analysis.chGrantedTxMap);
+            CalculateE2EDelay(analysis.sumDelay, analysis.macTxMap, analysis.macAckMap);
         }
         sumReliability += reliability;
         sumDropReliabilty += dropReliability;
         sumTxReliability += txReliability;
 
         //Delay
-        analysis.avgChAccessDelay = analysis.sumChAccessDelay/(analysis.phyRxMap.size());//-analysis.chAccessCount);
+        if(reliabilityMode[it])
+        {
+        analysis.avgChAccessDelay = analysis.sumChAccessDelay/((analysis.phyRxMap.size()-analysis.chAccessCount)/randomSampling);
         sumChAccessDelay += analysis.avgChAccessDelay;
-        analysis.avgDelay = analysis.sumDelay/analysis.macRxMap.size();
+        analysis.avgDelay = analysis.sumDelay/(analysis.macRxMap.size()/randomSampling);
         sumDelay += analysis.avgDelay;
+        }
+        else
+        {
+            analysis.avgChAccessDelay = analysis.sumChAccessDelay/(analysis.phyRxMap.size()-analysis.chAccessCount);
+            sumChAccessDelay += analysis.avgChAccessDelay;
+            analysis.avgDelay = analysis.sumDelay/analysis.macRxMap.size();
+            sumDelay += analysis.avgDelay;
+        }
 
         //Association and Deassociation Delay
         Time assocDelay{"0s"};
         assocDelay = analysis.sumAssocTime - analysis.sumDeAssocTime;
+        if (assocDelay > simulationTime)
+        {
+            assocDelay -= simulationTime;
+        }
         sumAssocDelay += assocDelay;
 
         // Performance Summary
