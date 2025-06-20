@@ -27,6 +27,7 @@
 #include "ns3/yans-wifi-helper.h"
 #include "ns3/wifi-mac.h"
 #include "ns3/frame-exchange-manager.h"
+#include "ns3/spectrum-wifi-phy.h"
 
 #include <array>
 #include <functional>
@@ -901,6 +902,7 @@ main(int argc, char* argv[])
     bool reliabilityModeMaster = false;
     bool enablePoisson = true;
     bool printOutput = false;
+    bool isSaturated = false;
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("simulationTime", "Simulation time", simulationTime);
@@ -1297,31 +1299,10 @@ main(int argc, char* argv[])
     auto spectrumChannel5 = CreateObject<MultiModelSpectrumChannel>();
     auto spectrumChannel6 = CreateObject<MultiModelSpectrumChannel>();
     auto spectrumChannel2_4 = CreateObject<MultiModelSpectrumChannel>();
-    auto lossModel5 = CreateObject<FriisPropagationLossModel>();
-    auto lossModel6 = CreateObject<FriisPropagationLossModel>();
-    auto lossModel2_4 = CreateObject<FriisPropagationLossModel>();
-    spectrumChannel5->AddPropagationLossModel(lossModel5);
-    spectrumChannel6->AddPropagationLossModel(lossModel6);
-    spectrumChannel2_4->AddPropagationLossModel(lossModel2_4);
-
-    if (errChannel)
-    {
-        Ptr<UniformRandomVariable> errRng = CreateObject<UniformRandomVariable>();
-        errRng->SetStream(seed);
-        auto errInd = errRng->GetInteger(0, 2);
-        if (errInd == 0)
-        {
-            Simulator::Schedule (MilliSeconds (1050), &FriisPropagationLossModel::SetMinLoss, lossModel6, 200);
-        }
-        else if (errInd == 1)
-        {
-            Simulator::Schedule (MilliSeconds (1050), &FriisPropagationLossModel::SetMinLoss, lossModel5, 200);
-        }
-        else
-        {
-            Simulator::Schedule (MilliSeconds (1050), &FriisPropagationLossModel::SetMinLoss, lossModel2_4, 200);
-        }
-    }
+    Ptr<FriisPropagationLossModel> lossModel5 = CreateObject<FriisPropagationLossModel>();
+    Ptr<FriisPropagationLossModel> lossModel6 = CreateObject<FriisPropagationLossModel>();
+    Ptr<FriisPropagationLossModel> lossModel2_4 = CreateObject<FriisPropagationLossModel>();
+    
 
     std::vector<SpectrumWifiPhyHelper> phyStas;
     for (uint16_t i = 0; i < numBss; i++)
@@ -1375,14 +1356,17 @@ main(int argc, char* argv[])
                 phyAps[it].Set(apLinkId, "ChannelSettings", StringValue(channelStrAps[it][apLinkId]));
                 if (findSubstring(channelStrAps[it][apLinkId],"5GHZ"))
                 {
+                    std::cout << "Adding channel 5 GHz to linkId " << linkId+1 << std::endl;
                     phyAps[it].AddChannel(spectrumChannel5, freqRangesAps[it][apLinkId]);
                 }
                 else if (findSubstring(channelStrAps[it][apLinkId],"6GHZ"))
                 {
+                    std::cout << "Adding channel 6 GHz to linkId " << linkId+1 << std::endl;
                     phyAps[it].AddChannel(spectrumChannel6, freqRangesAps[it][apLinkId]);
                 }
                 else if (findSubstring(channelStrAps[it][apLinkId],"2_4GHZ"))
                 {
+                    std::cout << "Adding channel 2.4 GHz to linkId " << linkId+1 << std::endl;
                     phyAps[it].AddChannel(spectrumChannel2_4, freqRangesAps[it][apLinkId]);
                 }
             }
@@ -1419,6 +1403,56 @@ main(int argc, char* argv[])
 
             apDevices.Add(wifiAps[it].Install(phyAps[it], mac, wifiApNodes.Get(it)));
             it++;
+        }
+    }
+
+    Ptr<WifiNetDevice> staNetDev = staDevices.Get(0)->GetObject<WifiNetDevice>();
+    for (uint8_t linkId = 0; linkId < nLinksSta[0]; linkId++)
+    {
+        Ptr<WifiPhy> phy = staNetDev->GetPhy(linkId);
+        double operatingFrequency = phy->GetFrequency()*1e6;
+        if (phy)
+        {
+            std::cout << "STA Link " << unsigned(linkId) << " frequency: " << operatingFrequency << " Hz" << std::endl;
+        }
+
+        if (findSubstring(channelStrStas[0][linkId],"5GHZ"))
+        {
+            lossModel5->SetFrequency(operatingFrequency);
+        }
+        else if (findSubstring(channelStrStas[0][linkId],"6GHZ"))
+        {
+            lossModel6->SetFrequency(operatingFrequency);
+        }
+        else if (findSubstring(channelStrStas[0][linkId],"2_4GHZ"))
+        {
+            lossModel2_4->SetFrequency(operatingFrequency);
+        }
+    }
+    spectrumChannel5->AddPropagationLossModel(lossModel5);
+    spectrumChannel6->AddPropagationLossModel(lossModel6);
+    spectrumChannel2_4->AddPropagationLossModel(lossModel2_4);
+
+    if (errChannel)
+    {
+        double errStartTime = 1100;
+        Ptr<UniformRandomVariable> errRng = CreateObject<UniformRandomVariable>();
+        errRng->SetStream(seed);
+        auto errInd = errRng->GetInteger(0, 2);
+        if (errInd == 0)
+        {
+            std::cout << "Error in channel 6 GHz" << std::endl;
+            Simulator::Schedule (MilliSeconds (errStartTime), &FriisPropagationLossModel::SetMinLoss, lossModel6, 200);
+        }
+        else if (errInd == 1)
+        {
+            std::cout << "Error in channel 5 GHz" << std::endl;
+            Simulator::Schedule (MilliSeconds (errStartTime), &FriisPropagationLossModel::SetMinLoss, lossModel5, 200);
+        }
+        else
+        {
+            std::cout << "Error in channel 2.4 GHz" << std::endl;
+            Simulator::Schedule (MilliSeconds (errStartTime), &FriisPropagationLossModel::SetMinLoss, lossModel2_4, 200);
         }
     }
 
@@ -1484,6 +1518,7 @@ main(int argc, char* argv[])
 
         if (!poissonLambda)
         {
+            isSaturated = true;
             poissonLambda = 1/packetInterval;
         }
         std::cout << "poissonLambda for BSS " << i+1 << " : " << poissonLambda << std::endl;
@@ -1561,9 +1596,23 @@ main(int argc, char* argv[])
     Time sumDelay{"0s"};
     Time sumChAccessDelay{"0s"};
 
+    double relErrorCount = 0;
+
     it = 0;
     for (auto& [macAddresss, analysis] : analysisMap) 
     {
+        for (auto mapIt = analysis.macAckMap.begin(); mapIt != analysis.macAckMap.end(); )
+        {
+            if (analysis.macTxMap.find(mapIt->first) == analysis.macTxMap.end())
+            {
+                mapIt = analysis.macAckMap.erase(mapIt);
+            }
+            else
+            {
+                ++mapIt;
+            }
+        }
+
         std::cout << "\n=== STA: " << macAddresss << " ===" << std::endl;
         
         std::cout << "Tx Packets : " << analysis.txPackets << std::endl;
@@ -1576,14 +1625,15 @@ main(int argc, char* argv[])
 
         // Throughput
         double throughput;
-        if(reliabilityMode[it])
-        {
-            throughput = (double) (analysis.rxPackets * 8 * payloadSize) / simulationTime.GetMicroSeconds();
-        }
-        else
-        {
-            throughput = (double) (analysis.macAckMap.size() * 8 * payloadSize) / simulationTime.GetMicroSeconds();
-        }
+        throughput = (double) (analysis.macAckMap.size() * 8 * payloadSize) / simulationTime.GetMicroSeconds();
+        // if(reliabilityMode[it])
+        // {
+        //     throughput = (double) (analysis.macAckMap.size() * 8 * payloadSize) / simulationTime.GetMicroSeconds();
+        // }
+        // else
+        // {
+        //     throughput = (double) (analysis.macAckMap.size() * 8 * payloadSize) / simulationTime.GetMicroSeconds();
+        // }
         sumThroughput += throughput;
         
         //Reliability
@@ -1595,7 +1645,7 @@ main(int argc, char* argv[])
             auto firstTxCount = CalculateFirstTransmissionReliability(nLinksSta[it],analysis.retransmitTxMapReliability);
             txReliability = 1 - (double) (analysis.retransmitTxMap.size()-firstTxCount)/ std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());
             dropReliability = 1 - (double) CalculateAllDropReliability(nLinksSta[it],analysis.dropTxMapReliability)/ std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());
-            reliability = (double) analysis.macRxMap.size()/analysis.macTxMap.size();
+            reliability = (double) analysis.macAckMap.size()/analysis.macTxMap.size();//analysis.macRxMap.size()/m_appTxMap.size();
             CalculateReliabilityChAccessDelay(analysis.chAccessCount, analysis.sumChAccessDelay, analysis.phyTxMapReliability, analysis.macAckMap, analysis.chReqTxMapReliability, analysis.chGrantedTxMapReliability);
             CalculateReliabilityE2EDelay(analysis.sumDelay, analysis.macTxMapReliability, analysis.macAckMap);
         }
@@ -1606,6 +1656,12 @@ main(int argc, char* argv[])
             reliability = (double) analysis.macAckMap.size()/analysis.macTxMap.size();
             CalculateChAccessDelay(analysis.chAccessCount, analysis.sumChAccessDelay, analysis.phyTxMap, analysis.macAckMap, analysis.chReqTxMap, analysis.chGrantedTxMap);
             CalculateE2EDelay(analysis.sumDelay, analysis.macTxMap, analysis.macAckMap);
+        }
+        
+        if (errChannel && (reliability >= 0.9))
+        {
+            reliability = 0;
+            relErrorCount++;
         }
         sumReliability += reliability;
         sumDropReliabilty += dropReliability;
@@ -1629,7 +1685,7 @@ main(int argc, char* argv[])
     }
 
     sumThroughput = sumThroughput/numBss;
-    sumReliability = sumReliability/numBss;
+    sumReliability = sumReliability/(numBss-relErrorCount);
     sumDropReliabilty = sumDropReliabilty/numBss;
     sumTxReliability = sumTxReliability/numBss;
     sumDelay = sumDelay/numBss;
@@ -1649,13 +1705,18 @@ main(int argc, char* argv[])
         std::ofstream outputFile;
         std::string outputFileName;
         
-        if (poissonLambda > 0)
+        if (!isSaturated)
         {
-        outputFileName = outputDir + "/wifi-ehr-results-unsaturated";
+            outputFileName = outputDir + "/wifi-ehr-results-unsaturated";
         }
         else
         {
             outputFileName = outputDir + "/wifi-ehr-results";
+        }
+
+        if (errChannel)
+        {
+            outputFileName += "-error";
         }
         
         if (reliabilityModeMaster)
@@ -1681,6 +1742,38 @@ main(int argc, char* argv[])
         outputFile.flush();
         outputFile.close();
     }
+
+    // std::cout << "\n=== AP Spectrum Channel Check ===" << std::endl;
+    // for (uint32_t i = 0; i < apDevices.GetN(); ++i)
+    // {
+    //     Ptr<WifiNetDevice> apDev = DynamicCast<WifiNetDevice>(apDevices.Get(i));
+    //     Ptr<WifiPhy> phy = apDev->GetPhy();
+    //     Ptr<SpectrumWifiPhy> spectrumPhy = DynamicCast<SpectrumWifiPhy>(phy);
+    //     if (spectrumPhy)
+    //     {
+    //         Ptr<Channel> ch = spectrumPhy->GetChannel();
+    //         Ptr<SpectrumChannel> channel = DynamicCast<SpectrumChannel>(ch);
+    //         std::cout << "AP " << i << " MAC: " << apDev->GetMac()->GetAddress()
+    //                 << " Channel Ptr: " << channel << std::endl;
+
+    //         Ptr<MultiModelSpectrumChannel> mmChannel = channel->GetObject<MultiModelSpectrumChannel>();
+    //         if (mmChannel)
+    //         {
+    //             Ptr<FriisPropagationLossModel> lossModel = DynamicCast<FriisPropagationLossModel>(mmChannel->GetPropagationLossModel());
+    //             auto minLoss = lossModel->GetMinLoss();
+    //             std::cout << "    LossModel: " << lossModel << std::endl;
+    //             std::cout << "    minLoss: " << minLoss << std::endl;
+    //         }
+    //         else
+    //         {
+    //             std::cout << "    Channel is not MultiModelSpectrumChannel." << std::endl;
+    //         }
+    //     }
+    //     else
+    //     {
+    //         std::cout << "AP " << i << " does not use SpectrumWifiPhy." << std::endl;
+    //     }
+    // }
 
     Simulator::Destroy();
 

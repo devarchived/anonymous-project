@@ -54,6 +54,7 @@ static bool g_verbose = false;
  
 bool m_reliabilityMode = false;
 std::map<Mac48Address,Mac48Address>  m_apStaAddressMap;
+Mac48Address m_associated = Mac48Address();
 NetDeviceContainer m_staDevices;
 
 std::map<uint64_t,Time> m_appTxMap;
@@ -153,6 +154,57 @@ MonitorPathLoss(uint32_t linkId, Ptr<IndoorBuildingsPropagationLossModel> lossMo
 
     // Schedule the next callback
     Simulator::Schedule(MilliSeconds(100), &MonitorPathLoss, linkId, lossModel, wifiAps, wifiStas);
+}
+
+void 
+MonitorAssoc()
+{
+    if(m_associated != Mac48Address())
+    {
+        std::cout << "STA is associated" << std::endl;
+    }
+    else
+    {
+        std::cout << "STA is deassociated" << std::endl;
+    }
+
+    // Schedule the next callback
+    Simulator::Schedule(MilliSeconds(1000), &MonitorAssoc);
+}
+
+// void 
+// MonitorRxPower(double txPower, uint32_t linkId, Ptr<IndoorBuildingsPropagationLossModel> lossModel, NodeContainer wifiAps, NodeContainer wifiStas) 
+// {
+//     for (uint32_t i = 0; i < wifiAps.GetN(); i++)
+//     {
+//         if(m_associated == wifiAps.Get(i)->GetDevice(0)->GetAddress())
+//         {
+//             double rxPower = lossModel->DoCalcRxPower(txPower,wifiAps.Get(i)->GetObject<MobilityModel>(), wifiStas.Get(0)->GetObject<MobilityModel>());
+//             NS_LOG_INFO("RxPower from AP with linkId" << linkId << " using frequency " << lossModel->GetFrequency() << " : " << rxPower << " dB");
+//             std::cout << "RxPower from AP with linkId" << linkId << " using frequency " << lossModel->GetFrequency() << " : " << rxPower << " dB" << std::endl;
+//         }
+//     }
+
+//     // Schedule the next callback
+//     Simulator::Schedule(MilliSeconds(1000), &MonitorRxPower, txPower, apIndex, lossModel, wifiAps, wifiStas);
+// }
+
+void 
+MonitorRxPower(double txPower, uint32_t linkId, Ptr<IndoorBuildingsPropagationLossModel> lossModel, NodeContainer wifiAps, NodeContainer wifiStas) 
+{
+    for (uint32_t i = 0; i < wifiAps.GetN(); i++)
+    {
+        if(m_associated == wifiAps.Get(i)->GetDevice(0)->GetAddress())
+        {
+            std::cout << "Debug MAC Address Associated AP " << m_associated << std::endl;
+            double rxPower = lossModel->DoCalcRxPower(txPower,wifiAps.Get(i)->GetObject<MobilityModel>(), wifiStas.Get(0)->GetObject<MobilityModel>());
+            NS_LOG_INFO("RxPower from AP with linkId" << linkId << " using frequency " << lossModel->GetFrequency() << " : " << rxPower << " dB");
+            std::cout << "RxPower from AP with linkId" << linkId << " using frequency " << lossModel->GetFrequency() << " : " << rxPower << " dB" << std::endl;
+        }
+    }
+
+    // Schedule the next callback
+    Simulator::Schedule(MilliSeconds(1000), &MonitorRxPower, txPower, linkId, lossModel, wifiAps, wifiStas);
 }
 
 std::vector<Vector> 
@@ -277,9 +329,10 @@ AssignFrequenciesToAps(uint16_t numBss,
 }
 
 void
-AssocTrace(std::string context, Mac48Address staAddress, Mac48Address apAdress)
+AssocTrace(std::string context, Mac48Address staAddress, Mac48Address apAddress)
 {
-    std::cout << Simulator::Now().As(Time::S) << " STA is associated with " << apAdress << std::endl;
+    m_associated = apAddress;
+    std::cout << Simulator::Now().As(Time::S) << " STA is associated with " << apAddress << std::endl;
 
     Analysis& staAnalysis = analysisMap[staAddress];
     
@@ -296,6 +349,7 @@ LinkAssocTrace(std::string context, uint8_t linkId, Mac48Address apAdress)
 void
 DeAssocTrace(std::string context, Mac48Address staAddress, Mac48Address apAdress)
 {
+    m_associated = Mac48Address();
     std::cout << Simulator::Now().As(Time::S) << " STA is deassociated" << std::endl;
 
     Analysis& staAnalysis = analysisMap[staAddress];
@@ -857,7 +911,7 @@ int main(int argc, char *argv[])
     double factorySizeX = 20; // m
     double factorySizeY = 20;  // m
     double factoryHeight = 3; // m
-    double wallLoss = 9; // dB
+    double wallLoss = 5; // dB
 
     // Wifi Simulation Parameters
     bool udp{true};
@@ -891,9 +945,10 @@ int main(int argc, char *argv[])
     double minExpectedThroughput{0};
     double maxExpectedThroughput{0};
     Time accessReqInterval{0};
-    uint32_t maxMissedBeacons = 1;
+    uint32_t maxMissedBeacons = 3;
     bool enablePoisson = true;
     bool printOutput = false;
+    bool isSaturated = false;
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("simulationTime", "Simulation time", simulationTime);
@@ -1362,6 +1417,7 @@ int main(int argc, char *argv[])
 
         if (!poissonLambda)
         {
+            isSaturated = true;
             poissonLambda = 1/packetInterval;
         }
         std::cout << "poissonLambda for BSS " << i+1 << " : " << poissonLambda << std::endl;
@@ -1398,8 +1454,12 @@ int main(int argc, char *argv[])
     for (uint32_t i = 0; i < numBss; i++) 
     {
         Ptr<WifiNetDevice> wifiStaDev = DynamicCast<WifiNetDevice>(staDevices.Get(i));
-        Ptr<WifiNetDevice> wifiApDev = DynamicCast<WifiNetDevice>(apDevices.Get(i));
-        m_apStaAddressMap[wifiApDev->GetMac()->GetAddress()] = wifiStaDev->GetMac()->GetAddress();
+        Ptr<WifiNetDevice> wifiApDev;
+        for (uint16_t j = 0; j < numApsPerBss[i]; j++)
+        {
+            wifiApDev = DynamicCast<WifiNetDevice>(apDevices.Get(j));
+            m_apStaAddressMap[wifiApDev->GetMac()->GetAddress()] = wifiStaDev->GetMac()->GetAddress();
+        }
     }
 
     // Set guard interval and MPDU buffer size
@@ -1427,6 +1487,26 @@ int main(int argc, char *argv[])
     //     else if (findSubstring(channelStr[linkId],"2_4GHZ"))
     //     {
     //         Simulator::Schedule(Seconds(0), &MonitorPathLoss, linkId, lossModel2_4, wifiApNodes, wifiStaNodes);
+    //     }
+    // }
+
+    // // Schedule the rxPower calculation callback
+    // Simulator::Schedule(Seconds(0.5), &MonitorAssoc);
+    // for (uint32_t linkId = 0; linkId < nLinks; linkId++)
+    // {
+        
+    //     if (findSubstring(channelStr[linkId],"5GHZ"))
+    //     {
+    //         Simulator::Schedule(Seconds(0.5), &MonitorRxPower, powAp, linkId, lossModel5, wifiApNodes, wifiStaNodes);
+    //     }
+    //     else if (findSubstring(channelStr[linkId],"6GHZ"))
+    //     {
+            
+    //         Simulator::Schedule(Seconds(0.5), &MonitorRxPower, powAp, linkId, lossModel6, wifiApNodes, wifiStaNodes);
+    //     }
+    //     else if (findSubstring(channelStr[linkId],"2_4GHZ"))
+    //     {
+    //         Simulator::Schedule(Seconds(0.5), &MonitorRxPower, powAp, linkId, lossModel2_4, wifiApNodes, wifiStaNodes);
     //     }
     // }
 
@@ -1462,6 +1542,18 @@ int main(int argc, char *argv[])
 
     for (auto& [macAddresss, analysis] : analysisMap) 
     {
+        for (auto mapIt = analysis.macAckMap.begin(); mapIt != analysis.macAckMap.end(); )
+        {
+            if (analysis.macTxMap.find(mapIt->first) == analysis.macTxMap.end())
+            {
+                mapIt = analysis.macAckMap.erase(mapIt);
+            }
+            else
+            {
+                ++mapIt;
+            }
+        }
+
         std::cout << "\n=== STA: " << macAddresss << " ===" << std::endl;
 
         std::cout << "App Tx Packets : " << m_appTxMap.size() << std::endl;
@@ -1501,7 +1593,11 @@ int main(int argc, char *argv[])
         //Association and Deassociation Delay
         Time assocDelay{"0s"};
         assocDelay = analysis.sumAssocTime - analysis.sumDeAssocTime;
-        if (assocDelay > simulationTime)
+        while (assocDelay <= Time("0s"))
+        {
+            assocDelay += simulationTime;
+        }
+        while (assocDelay > simulationTime)
         {
             assocDelay -= simulationTime;
         }
@@ -1541,7 +1637,7 @@ int main(int argc, char *argv[])
         std::ofstream outputFile;
         std::string outputFileName;
         
-        if (poissonLambda > 0)
+        if (!isSaturated)
         {
         outputFileName = currentDir + "/wifi-eht-roaming-results-unsaturated";
         }
@@ -1549,6 +1645,8 @@ int main(int argc, char *argv[])
         {
             outputFileName = currentDir + "/wifi-ehr-roaming-results";
         }
+
+        outputFileName += ".txt";
 
         if (!(fileExists(outputFileName)))
         {
@@ -1560,7 +1658,7 @@ int main(int argc, char *argv[])
             outputFile.seekp(0, std::ios::end);
         }
 
-        outputFile << seed << "," << numBss << ","  << sumThroughput << "," << sumDropReliabilty*100 << "," << sumReliability*100 << "," << sumDelay.As(Time::MS) << "," << sumChAccessDelay.As(Time::MS) << "\n";
+        outputFile << seed << "," << maxMissedBeacons << ","  << sumThroughput << "," << sumDropReliabilty*100 << "," << sumReliability*100 << "," << sumDelay.As(Time::MS) << "," << sumChAccessDelay.As(Time::MS) << "," << sumAssocDelay.As(Time::MS) << "\n";
         outputFile.flush();
         outputFile.close();
     }

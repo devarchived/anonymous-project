@@ -159,7 +159,7 @@ ApplicationContainer::DesignatePacketToSend() const
         app->SetDesignatedPacket(p);
         if (m_enablePoisson)
         {
-        app->SetInterval(packetInterval);
+            app->SetInterval(packetInterval);
         }
     }
 

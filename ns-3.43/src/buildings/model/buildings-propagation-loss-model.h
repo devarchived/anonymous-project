@@ -65,6 +65,14 @@ class BuildingsPropagationLossModel : public PropagationLossModel
                          Ptr<MobilityModel> a,
                          Ptr<MobilityModel> b) const override;
 
+    /**
+     * Calculate the shadowing loss
+     * \param a Room A data
+     * \param b Room B data
+     * \returns the propagation loss (in dBm)
+     */
+    double GetShadowing(Ptr<MobilityModel> a, Ptr<MobilityModel> b) const;
+
   protected:
     /**
      * Calculate the external wall loss
@@ -86,13 +94,6 @@ class BuildingsPropagationLossModel : public PropagationLossModel
      */
     double InternalWallsLoss(Ptr<MobilityBuildingInfo> a, Ptr<MobilityBuildingInfo> b) const;
 
-    /**
-     * Calculate the shadowing loss
-     * \param a Room A data
-     * \param b Room B data
-     * \returns the propagation loss (in dBm)
-     */
-    double GetShadowing(Ptr<MobilityModel> a, Ptr<MobilityModel> b) const;
 
     double m_lossInternalWall; //!< loss from internal walls (in dBm)
 

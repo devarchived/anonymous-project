@@ -1912,7 +1912,6 @@ StaWifiMac::ReceiveBeacon(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
     }
     
     NS_LOG_INFO("Beacon received from " << hdr.GetAddr3() << " with SNR " << apInfo.m_snr);
-    // std::cout << "Beacon received from " << hdr.GetAddr3() << " with SNR " << apInfo.m_snr<< std::endl;
     // if (m_roamingStateResetLinkMap.find(linkId) == m_roamingStateResetLinkMap.end())
     // {
     //     NS_LOG_INFO("Reset roaming state " << hdr.GetAddr3() << " for associated link " << +linkId);

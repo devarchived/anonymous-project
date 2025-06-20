@@ -14,7 +14,7 @@ plt.rcParams.update({
 })
 
 # Set up the figure
-plt.figure(figsize=(10, 10), dpi=300)
+plt.figure(figsize=(10, 10))
 
 # Create grids and labels
 plt.grid(True, which='both', linestyle='--', alpha=0.7)
@@ -76,7 +76,7 @@ plt.tight_layout(pad=3.0)
 
 # Save as PDF
 plt.savefig('wifi7-static-scenario.pdf', 
-               dpi=300, 
+               dpi=1200, 
                bbox_inches='tight', 
                pad_inches=0.1,
                format='pdf')

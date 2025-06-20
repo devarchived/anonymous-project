@@ -269,6 +269,7 @@ FriisPropagationLossModel::DoCalcRxPower(double txPowerDbm,
     double denominator = 16 * M_PI * M_PI * distance * distance * m_systemLoss;
     double lossDb = -10 * log10(numerator / denominator);
     NS_LOG_DEBUG("distance=" << distance << "m, loss=" << lossDb << "dB");
+
     return txPowerDbm - std::max(lossDb, m_minLoss);
 }
 

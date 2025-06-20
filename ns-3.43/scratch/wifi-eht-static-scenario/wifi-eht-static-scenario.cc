@@ -636,6 +636,7 @@ main(int argc, char* argv[])
     Time accessReqInterval{0};
     bool enablePoisson = true;
     bool printOutput = false;
+    bool isSaturated = false;
 
     std::vector<bool> enableMultiApCoordination(numBss); 
     for (uint16_t i = 0; i < numBss; i++)
@@ -1063,6 +1064,7 @@ main(int argc, char* argv[])
 
         if (!poissonLambda)
         {
+            isSaturated = true;
             poissonLambda = 1/packetInterval;
         }
         std::cout << "poissonLambda for BSS " << i+1 << " : " << poissonLambda << std::endl;
@@ -1132,6 +1134,18 @@ main(int argc, char* argv[])
 
     for (auto& [macAddresss, analysis] : analysisMap) 
     {
+        for (auto mapIt = analysis.macAckMap.begin(); mapIt != analysis.macAckMap.end(); )
+        {
+            if (analysis.macTxMap.find(mapIt->first) == analysis.macTxMap.end())
+            {
+                mapIt = analysis.macAckMap.erase(mapIt);
+            }
+            else
+            {
+                ++mapIt;
+            }
+        }
+        
         std::cout << "\n=== STA: " << macAddresss << " ===" << std::endl;
         
         std::cout << "Tx Packets : " << analysis.txPackets << std::endl;
@@ -1197,7 +1211,7 @@ main(int argc, char* argv[])
         std::ofstream outputFile;
         std::string outputFileName;
 
-        if (poissonLambda > 0)
+        if (!isSaturated)
         {
         outputFileName = outputDir + "/wifi-eht-results-unsaturated";
         }
@@ -1205,6 +1219,13 @@ main(int argc, char* argv[])
         {
             outputFileName = outputDir + "/wifi-eht-results";
         }
+
+        if (errChannel)
+        {
+            outputFileName += "-error";
+        }
+
+        outputFileName += ".txt";
 
         if (!(fileExists(outputFileName)))
         {

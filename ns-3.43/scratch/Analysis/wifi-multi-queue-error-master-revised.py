@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
@@ -6,6 +7,28 @@ import matplotlib.lines as mlines
 import scipy
 import pandas as pd
 import math
+
+# Set global style parameters
+plt.rcParams.update({
+    'font.size': 20,
+    'axes.labelsize': 20,
+    'axes.titlesize': 20,
+    'xtick.labelsize': 20,
+    'ytick.labelsize': 20,
+    'legend.fontsize': 15,
+    'axes.linewidth': 2,
+    'grid.linewidth': 1,
+    'lines.markersize': 9,
+    'lines.markeredgewidth': 1.5
+})
+
+def filter_extreme_values(metric_values, lower_percentile=5, upper_percentile=90):
+    if len(metric_values) == 0:
+        return []
+    lower_bound = np.percentile(metric_values, lower_percentile)
+    upper_bound = np.percentile(metric_values, upper_percentile)
+
+    return [value for value in metric_values if lower_bound <= value <= upper_bound]
 
 @dataclass
 class BandParameters:
@@ -54,7 +77,7 @@ def calculate_steady_state_k(rho,k, n_links):
 
 def calculate_mean_service_time(p, p_collision, p_error, m, delta, slot_size, t_collision, t_error, mean_backoff_time, t_success):
     p = np.clip(p, 0.0001, 0.9999)
-    mean_retransmission = (p*(1-np.power(p,m))/(1-p))
+    mean_retransmission = max((p_collision*(1-np.power(p_collision,m))/(1-p_collision)),1/(1-p_error))
     mean_retransmission_time = (mean_backoff_time*slot_size)/(1-delta)+(p_collision*t_collision+(1-p_collision)*p_error*t_error)/p
     mean_transmission_time = (mean_backoff_time*slot_size)/(1-delta)+t_success
 
@@ -161,7 +184,7 @@ def calculate_lb_reliability(p_coll,p_error, M):
 
 def calculate_delay(mean_service_time, mean_waiting_time):
     """Calculate the average delay."""
-    delay = mean_service_time# + mean_waiting_time
+    delay = mean_service_time #+ mean_waiting_time
     return delay
 
 def run_simulation_for_band(band_params, common_params):
@@ -408,7 +431,13 @@ def main():
 
     # %% Plotting for Wifi 7
     # Read the data file
-    wifi_eht = pd.read_csv('../wifi-eht-static-scenario/wifi-eht-results-unsaturated.txt', header=None, 
+    wifi_eht_input_filename = '../wifi-eht-static-scenario/wifi-eht-results-unsaturated-error.txt'
+
+    base_name = os.path.basename(wifi_eht_input_filename)
+    out_prefix = 'wifi8' if 'ehr' in base_name else 'wifi7' if 'eht' in base_name else 'wifi'
+    reliability_str = '-reliability' if 'reliability' in base_name else ''
+
+    wifi_eht = pd.read_csv(wifi_eht_input_filename, header=None, 
                     names=['seedNumber', 'numBSS', 'Throughput', 'PacketDropReliability', 
                             'PacketReceivedReliability', 'EndToEndDelay', 'ChannelAccessDelay'])
 
@@ -426,76 +455,79 @@ def main():
     th_data = [wifi_eht[wifi_eht['numBSS'] == val]['Throughput'].values for val in sorted(wifi_eht['numBSS'].unique())]
     positions = sorted(wifi_eht['numBSS'].unique())
     
-    plt.figure()#dpi=150)
-    th_box = plt.boxplot(th_data, 
+    plt.figure()
+    th_box = plt.violinplot(th_data, 
                       positions=positions,
-                      notch=False,
                       vert=True,
-                      patch_artist=False,
                       widths=0.7,
-                      showfliers=True,
-                      medianprops=dict(color="red"))
-    th_box_label = mpatches.Patch(facecolor='white', edgecolor='black', 
+                      showmeans=False,
+                      showmedians=True,
+                      showextrema=True)
+    th_box_label = mpatches.Patch(facecolor='skyblue', edgecolor='navy',  
                           label='WiFi 7 MLO-STR (ns-3 Simulation)')
-    th_analysis = plt.plot(n_obss_values, [t/1e6 for t in result_summary['total_throughput']], 'go-', label='WiFi 7 MLO-STR (Analysis)')
+    th_analysis = plt.plot(n_obss_values, [t/1e6 for t in result_summary['total_throughput']], 'go', label='WiFi 7 MLO-STR (Analysis)')
     
-    plt.xlabel('Number of OBSS', fontsize=12)
-    plt.ylabel('Throughput (Mbps)', fontsize=12)
+    plt.xlabel('Number of OBSS', fontsize=20)
+    plt.ylabel('Throughput (Mbps)', fontsize=20)
     plt.grid(True, alpha=0.5)
     plt.tight_layout()
     plt.ylim(0, 30)
     plt.legend(handles=[th_box_label, th_analysis[0]], loc='best')
-    plt.show()
+    
+    plot_filename_th = f'../Graphs/frame-error-probability/th-{out_prefix}{reliability_str}-error.pdf'
+    plt.savefig(plot_filename_th, dpi=1200)
 
     # Plot reliability (Simulation vs Analysis)
-    rel_data = [wifi_eht[wifi_eht['numBSS'] == val]['PacketDropReliability'].values for val in sorted(wifi_eht['numBSS'].unique())]
+    rel_data = [wifi_eht[wifi_eht['numBSS'] == val]['PacketReceivedReliability'].values for val in sorted(wifi_eht['numBSS'].unique())]
     positions = sorted(wifi_eht['numBSS'].unique())
 
-    plt.figure()#dpi=150)
-    rel_box = plt.boxplot(rel_data, 
+    plt.figure()
+    rel_box = plt.violinplot(rel_data, 
                       positions=positions,
-                      notch=False,
                       vert=True,
-                      patch_artist=False,
                       widths=0.7,
-                      showfliers=True,
-                      medianprops=dict(color="red"))
-    rel_box_label = mpatches.Patch(facecolor='white', edgecolor='black', 
+                      showmeans=False,
+                      showmedians=True,
+                      showextrema=True)
+    rel_box_label = mpatches.Patch(facecolor='skyblue', edgecolor='navy',
                           label='WiFi 7 MLO-STR (ns-3 Simulation)')
-    rel_analysis = plt.plot(n_obss_values, [r*100 for r in result_summary['avg_reliability']], 'go-', label='WiFi 7 MLO-STR (Analysis)')
+    rel_analysis = plt.plot(n_obss_values, [r*100 for r in result_summary['avg_reliability']], 'go', label='WiFi 7 MLO-STR (Analysis)')
     
-    plt.xlabel('Number of OBSS', fontsize=12)
-    plt.ylabel('Reliability (%)', fontsize=12)
+    plt.xlabel('Number of OBSS', fontsize=20)
+    plt.ylabel('Reliability (%)', fontsize=20)
     plt.grid(True, alpha=0.5)
     plt.tight_layout()
     plt.ylim(50, 105)
     plt.legend(handles=[rel_box_label, rel_analysis[0]], loc='best')
-    plt.show()
+    
+    plot_filename_rel = f'../Graphs/frame-error-probability/rel-{out_prefix}{reliability_str}-error.pdf'
+    plt.savefig(plot_filename_rel, dpi=1200)
 
     # Plot delay (Simulation vs Analysis)
-    delay_data = [wifi_eht[wifi_eht['numBSS'] == val]['ChannelAccessDelay'].values for val in sorted(wifi_eht['numBSS'].unique())]
+    delay_data = [filter_extreme_values(wifi_eht[wifi_eht['numBSS'] == val]['ChannelAccessDelay'].values) for val in sorted(wifi_eht['numBSS'].unique())]
     positions = sorted(wifi_eht['numBSS'].unique())
 
-    plt.figure()#dpi=150)
-    delay_box = plt.boxplot(delay_data, 
+    plt.figure()
+    delay_box = plt.violinplot(delay_data, 
                       positions=positions,
-                      notch=False,
                       vert=True,
-                      patch_artist=False,
                       widths=0.7,
-                      showfliers=True,
-                      medianprops=dict(color="red"))
-    delay_box_label = mpatches.Patch(facecolor='white', edgecolor='black', 
+                      showmeans=False,
+                      showmedians=True,
+                      showextrema=True)
+    delay_box_label = mpatches.Patch(facecolor='skyblue', edgecolor='navy',
                           label='WiFi 7 MLO-STR (ns-3 Simulation)')
-    delay_analysis = plt.plot(n_obss_values, [d*1e3 for d in result_summary['avg_delay']], 'go-', label='WiFi 7 MLO-STR (Analysis)')
+    delay_analysis = plt.plot(n_obss_values, [d*1e3 for d in result_summary['avg_delay']], 'go', label='WiFi 7 MLO-STR (Analysis)')
     
-    plt.xlabel('Number of OBSS', fontsize=12)
-    plt.ylabel('Delay (ms)', fontsize=12)
+    plt.xlabel('Number of OBSS', fontsize=20)
+    plt.ylabel('Delay (ms)', fontsize=20)
     plt.grid(True, alpha=0.5)
     plt.tight_layout()
-    plt.ylim(0, 2)
+    plt.ylim(0, 20)
     plt.legend(handles=[delay_box_label, delay_analysis[0]], loc='best')
-    plt.show()
+    
+    plot_filename_delay = f'../Graphs/frame-error-probability/ch-delay-{out_prefix}{reliability_str}-error.pdf'
+    plt.savefig(plot_filename_delay, dpi=1200)
 
 if __name__ == "__main__":
     main()
