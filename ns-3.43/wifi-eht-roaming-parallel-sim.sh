@@ -3,8 +3,8 @@
 # Configurable parameters
 simulation_file="scratch/wifi-eht-roaming-scenario/wifi-eht-roaming-scenario.cc"
 printOutput=true
-poissonLambda=1000
-wallLoss=5
+poissonLambda=500
+wallLoss=3
 
 # Function to run simulations for a given numBss
 run_simulations() {
@@ -22,7 +22,7 @@ export -f run_simulations
 # ./ns3 configure --disable-werror --enable-examples --build-profile=optimized
 # ./ns3 build
 
-MAX_PARALLEL=10
+MAX_PARALLEL=7
 
 # Run simulations in parallel for numBss from 1 to 4
 for maxMissedBeacons in {1..10}; do

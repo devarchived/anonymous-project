@@ -480,8 +480,6 @@ WifiAssocManager::GetNextAffiliatedAp(const ReducedNeighborReport& rnr, std::siz
 std::list<WifiAssocManager::RnrLinkInfo>
 WifiAssocManager::GetAllAffiliatedAps(const ReducedNeighborReport& rnr)
 {
-    NS_LOG_INFO("Debug GetAllAffiliatedAps()");
-
     std::list<WifiAssocManager::RnrLinkInfo> apList;
     std::size_t nbrApInfoId = 0;
     std::optional<WifiAssocManager::RnrLinkInfo> next;
@@ -509,6 +507,15 @@ WifiAssocManager::IsProbeRequestEventPending(uint8_t linkId) const
     NS_LOG_FUNCTION(this << +linkId);
     
     return false;
+}
+
+void
+WifiAssocManager::ClearApList()
+{
+    NS_LOG_FUNCTION(this);
+
+    m_apList.clear();
+    m_apListIt.clear();
 }
 
 } // namespace ns3

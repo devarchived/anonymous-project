@@ -451,6 +451,7 @@ void
 WifiPhyStateHelper::NotifyRxPsduFailed(Ptr<const WifiPsdu> psdu, double snr)
 {
     NS_LOG_FUNCTION(this << *psdu << snr);
+
     if (!m_rxErrorTrace.IsEmpty())
     {
         m_rxErrorTrace(psdu->GetPacket(), snr);

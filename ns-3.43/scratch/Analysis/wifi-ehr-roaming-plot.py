@@ -34,7 +34,7 @@ def main():
     # %% Plotting for Wifi 8
     
     # Read the data file
-    input_filename = '../wifi-ehr-roaming-scenario/sorted-wifi-ehr-roaming-results-unsaturated-5-dB.txt'
+    input_filename = '../wifi-ehr-roaming-scenario/result-logs/sorted-wifi-ehr-roaming-results-unsaturated-9-dB.txt'
     
     # Generate input filename
     base_name = os.path.basename(input_filename)
@@ -53,7 +53,7 @@ def main():
 
     wifi_ehr = pd.read_csv(input_filename, header=None, 
                     names=['seedNumber', 'maxMissedBeacons', 'Throughput', 'PacketDropReliability', 
-                            'PacketReceivedReliability', 'EndToEndDelay', 'ChannelAccessDelay','AssociationDelay'])
+                            'PacketReceivedReliability', 'EndToEndDelay', 'ChannelAccessDelay','AssociationDelay','AssociationCount'])
 
     # Clean the data (remove units from delay columns)
     wifi_ehr['EndToEndDelay'] = wifi_ehr['EndToEndDelay'].str.replace('ms', '').str.replace('+', '').astype(float)
@@ -87,7 +87,7 @@ def main():
     plt.ylabel('Throughput (Mbps)', fontsize=20)
     plt.grid(True, alpha=0.5)
     plt.tight_layout()
-    plt.ylim(0, 30)
+    plt.ylim(0, 20)
     plt.legend(handles=[th_box_label], loc='best')
 
     plot_filename_th = f'../Graphs/{out_prefix}-roaming/th-{out_prefix}{reliability_str}-roaming-{db_part}.pdf'
@@ -137,13 +137,13 @@ def main():
     plt.ylabel('Delay (ms)', fontsize=20)
     plt.grid(True, alpha=0.5)
     plt.tight_layout()
-    plt.ylim(0, 10)
+    plt.ylim(0, 5)
     plt.legend(handles=[delay_box_label], loc='best')
     
     plot_filename_delay = f'../Graphs/{out_prefix}-roaming/ch-delay-{out_prefix}{reliability_str}-roaming-{db_part}.pdf'
     plt.savefig(plot_filename_delay, dpi=1200)
 
-    # Plot delay (Simulation vs Analysis)
+    # Plot assoc delay (Simulation vs Analysis)
     assoc_delay_data = [filter_extreme_values(wifi_ehr[wifi_ehr['maxMissedBeacons'] == val]['AssociationDelay'].values) for val in sorted(wifi_ehr['maxMissedBeacons'].unique())]
     positions = sorted(wifi_ehr['maxMissedBeacons'].unique())
 
@@ -162,10 +162,35 @@ def main():
     plt.ylabel('Association Delay (s)', fontsize=20)
     plt.grid(True, alpha=0.5)
     plt.tight_layout()
-    plt.ylim(0, 80)
+    plt.ylim(0, 20)
     plt.legend(handles=[assoc_delay_box_label], loc='best')
     
     plot_filename_assoc_delay = f'../Graphs/{out_prefix}-roaming/assoc-delay-{out_prefix}{reliability_str}-roaming-{db_part}.pdf'
+    plt.savefig(plot_filename_assoc_delay, dpi=1200)
+
+    # Plot assoc count (Simulation vs Analysis)
+    assoc_count_data = [filter_extreme_values(wifi_ehr[wifi_ehr['maxMissedBeacons'] == val]['AssociationCount'].values) for val in sorted(wifi_ehr['maxMissedBeacons'].unique())]
+    positions = sorted(wifi_ehr['maxMissedBeacons'].unique())
+
+    plt.figure()
+    assoc_count_box = plt.violinplot(assoc_count_data, 
+                      positions=positions,
+                      vert=True,
+                      widths=0.7,
+                      showmeans=False,
+                      showmedians=True,
+                      showextrema=True)
+    assoc_count_box_label = mpatches.Patch(facecolor='skyblue', edgecolor='navy', 
+                          label='WiFi 8 JT (ns-3 Simulation)')
+    
+    plt.xlabel('Number of maximum missed beacons', fontsize=20)
+    plt.ylabel('(Re)Association Count', fontsize=20)
+    plt.grid(True, alpha=0.5)
+    plt.tight_layout()
+    plt.ylim(0, 10)
+    plt.legend(handles=[assoc_count_box_label], loc='best')
+    
+    plot_filename_assoc_delay = f'../Graphs/{out_prefix}-roaming/assoc-count-{out_prefix}{reliability_str}-roaming-{db_part}.pdf'
     plt.savefig(plot_filename_assoc_delay, dpi=1200)
 
 if __name__ == "__main__":

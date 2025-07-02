@@ -152,6 +152,8 @@ class WifiAssocManager : public Object
 
     virtual bool IsProbeRequestEventPending(uint8_t linkId) const;
 
+    void ClearApList();
+
   protected:
     /**
      * Constructor (protected as this is an abstract base class)

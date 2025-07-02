@@ -169,6 +169,8 @@ def calculate_throughput(n_obss, p_transmit, p_success, p_error, packet_length, 
     denominator = ((1 - p_transmit) * slot_size + 
                   p_transmit * p_success * (1 - p_error) * t_success + 
                   p_transmit * (1 - p_success) * t_collision + p_transmit*p_success*p_error*t_error)
+
+    print("Debugging thoughput :", numerator / denominator)
     return numerator / denominator
 
 def calculate_first_transmission_reliability(tau, p, n_obss):
@@ -459,6 +461,7 @@ def plot_throughput(n_obss_values, result_summary):
     plt.ylim(0, 150)
     plt.legend()
     plt.grid(True, alpha=0.5)
+    plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.show()
 
@@ -477,6 +480,7 @@ def plot_reliability(n_obss_values, result_summary):
     plt.ylim(95, 105)
     plt.legend()
     plt.grid(True, alpha=0.5)
+    plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.show()
 
@@ -512,6 +516,7 @@ def plot_delay(n_obss_values, result_summary):
     plt.ylabel('Delay (ms)', fontsize=20)
     plt.ylim(0, 10)
     plt.legend()
+    plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.grid(True, alpha=0.5)
     plt.show()
@@ -528,8 +533,8 @@ def main():
         'M': 7,
         'lambda_poisson' : 1000,
         'data_rate': 121.875e6,
-        'min_data_rate': 7.25e6,
-        'phy_header': 48e-6,
+        'min_data_rate': 6e6,
+        'phy_header': 52e-6,
         'mac_header_size': 26,
         'ack_size': 14,
         'slot_size': 9e-6,
@@ -587,6 +592,7 @@ def main():
     plt.xlabel('Number of OBSS', fontsize=20)
     plt.ylabel('Throughput (Mbps)', fontsize=20)
     plt.grid(True, alpha=0.5)
+    plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.ylim(0, 150)
     plt.legend(handles=[th_box_label, th_analysis[0]], loc='best')
@@ -614,6 +620,7 @@ def main():
     plt.xlabel('Number of OBSS', fontsize=20)
     plt.ylabel('Reliability (%)', fontsize=20)
     plt.grid(True, alpha=0.5)
+    plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.ylim(95, 105)
     plt.legend(handles=[rel_box_label, rel_analysis[0]], loc='best')
@@ -640,6 +647,7 @@ def main():
     plt.xlabel('Number of OBSS', fontsize=20)
     plt.ylabel('Delay (ms)', fontsize=20)
     plt.grid(True, alpha=0.5)
+    plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.ylim(0, 5)
     plt.legend(handles=[delay_box_label, delay_analysis[0]], loc='best')
@@ -688,6 +696,7 @@ def main():
     plt.xlabel('Number of OBSS', fontsize=20)
     plt.ylabel('Throughput (Mbps)', fontsize=20)
     plt.grid(True, alpha=0.5)
+    plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.ylim(0, 150)
     plt.legend(handles=[th_box_label, th_analysis[0]], loc='best')
@@ -714,6 +723,7 @@ def main():
     plt.xlabel('Number of OBSS', fontsize=20)
     plt.ylabel('Reliability (%)', fontsize=20)
     plt.grid(True, alpha=0.5)
+    plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.ylim(95, 105)
     plt.legend(handles=[rel_box_label, rel_analysis[0]], loc='best')
@@ -740,6 +750,7 @@ def main():
     plt.xlabel('Number of OBSS', fontsize=20)
     plt.ylabel('Delay (ms)', fontsize=20)
     plt.grid(True, alpha=0.5)
+    plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.ylim(0, 5)
     plt.legend(handles=[delay_box_label, delay_analysis[0]], loc='best')
@@ -788,6 +799,7 @@ def main():
     plt.xlabel('Number of OBSS', fontsize=20)
     plt.ylabel('Throughput (Mbps)', fontsize=20)
     plt.grid(True, alpha=0.5)
+    plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.ylim(0, 150)
     plt.legend(handles=[th_box_label, th_analysis[0]], loc='best')
@@ -814,6 +826,7 @@ def main():
     plt.xlabel('Number of OBSS', fontsize=20)
     plt.ylabel('Reliability (%)', fontsize=20)
     plt.grid(True, alpha=0.5)
+    plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.ylim(95, 105)
     plt.legend(handles=[rel_box_label, rel_analysis[0]], loc='best')
@@ -840,6 +853,7 @@ def main():
     plt.xlabel('Number of OBSS', fontsize=20)
     plt.ylabel('Delay (ms)', fontsize=20)
     plt.grid(True, alpha=0.5)
+    plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.ylim(0, 5)
     plt.legend(handles=[delay_box_label, delay_analysis[0]], loc='best')

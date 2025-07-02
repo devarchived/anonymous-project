@@ -1048,6 +1048,7 @@ StaWifiMac::ScanningTimeout(const std::optional<ApInfo>& bestAp)
     if (!bestAp.has_value())
     {
         NS_LOG_DEBUG("Exhausted list of candidate AP; restart scanning");
+        std::cout << "Exhausted list of candidate AP; restart scanning" << std::endl;
         StartScanning();
         return;
     }
@@ -1104,8 +1105,10 @@ StaWifiMac::ScanningTimeout(const std::optional<ApInfo>& bestAp)
     };
     Time beaconInterval = std::visit(getBeaconInterval, bestAp->m_frame);
     Time delay = beaconInterval * m_maxMissedBeacons;
-    // restart beacon watchdog
-    RestartBeaconWatchdog(delay);
+    
+    // // Thesis irrelevant
+    // // restart beacon watchdog
+    // RestartBeaconWatchdog(delay);
 
     SetState(WAIT_ASSOC_RESP);
     SendAssociationRequest(false);
@@ -1201,8 +1204,10 @@ StaWifiMac::ScanningTimeoutMultiAp(std::list<ApInfo> apList)
     };
     Time beaconInterval = std::visit(getBeaconInterval, apList.begin()->m_frame);
     Time delay = beaconInterval * m_maxMissedBeacons;
-    // restart beacon watchdog
-    RestartBeaconWatchdog(delay);
+    
+    // // Thesis irrelevant
+    // // restart beacon watchdog
+    // RestartBeaconWatchdog(delay);
 
     SetState(WAIT_ASSOC_RESP);
     for (const auto& [linkId, state] : m_linkStateMap)
@@ -1286,8 +1291,10 @@ StaWifiMac::ScanningTimeoutOnLink(uint8_t linkId, const std::optional<ApInfo>& b
     };
     Time beaconInterval = std::visit(getBeaconInterval, bestAp->m_frame);
     Time delay = beaconInterval * m_maxMissedBeacons;
-    // restart beacon watchdog
-    RestartBeaconWatchdogOnLink(linkId, delay);
+    
+    // // Thesis irrelevant
+    // // restart beacon watchdog
+    // RestartBeaconWatchdogOnLink(linkId, delay);
 
     SetLinkState(linkId, LINK_WAIT_ASSOC_RESP);
     SendAssociationRequestOnLink(linkId, false);
@@ -1401,6 +1408,9 @@ StaWifiMac::Disassociated()
     m_deAssocLogger(apAddr);
 
     m_aid = 0; // reset AID
+
+    //M. Sc. Thesis relevant
+    m_assocManager->ClearApList();
     TryToEnsureAssociated();
 }
 
@@ -1911,7 +1921,9 @@ StaWifiMac::ReceiveBeacon(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
         m_beaconInfo(apInfo);
     }
     
-    NS_LOG_INFO("Beacon received from " << hdr.GetAddr3() << " with SNR " << apInfo.m_snr);
+    double snrDb = 10.0 * std::log10(apInfo.m_snr);
+    NS_LOG_INFO("Beacon received from " << hdr.GetAddr3() << " with SNR " << snrDb);
+    // std::cout << "STA state " << m_state << " ,Beacon received from " << hdr.GetAddr3() << " with SNR " << snrDb <<  std::endl;
     // if (m_roamingStateResetLinkMap.find(linkId) == m_roamingStateResetLinkMap.end())
     // {
     //     NS_LOG_INFO("Reset roaming state " << hdr.GetAddr3() << " for associated link " << +linkId);
@@ -1969,10 +1981,16 @@ StaWifiMac::ReceiveBeacon(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
                     {
                         if (m_snrLinkMap[linkId] <= apInfo.m_snr)
                         {
+                            NS_LOG_INFO("Beacon received from better AP " << hdr.GetAddr3() << " for associated link " << +linkId);
+                            NS_LOG_INFO ("SNR comparison : " << m_snrLinkMap[linkId] << " < " << apInfo.m_snr);
                             m_snrLinkMap[linkId] = apInfo.m_snr;
                             RestartBeaconWatchdogOnLink(linkId,m_beaconRemTimeMap[linkId]);
-                            NS_LOG_INFO("Beacon received from better AP " << hdr.GetAddr3() << " for associated link " << +linkId);
                         }
+                        else
+                        {
+                            NS_LOG_INFO ("Beacon received from worse AP " << hdr.GetAddr3() << " for associated link " << +linkId);
+                            NS_LOG_INFO ( "SNR comparison : " << m_snrLinkMap[linkId] << " > " << apInfo.m_snr);
+                        } 
                     }
                 }
             }
@@ -1994,6 +2012,7 @@ StaWifiMac::ReceiveBeacon(Ptr<const WifiMpdu> mpdu, uint8_t linkId)
     }
     else
     {
+        // std::cout << "STA is unassociated, but received Beacon from " << hdr.GetAddr3() << std::endl;
         NS_LOG_INFO("Beacon received from " << hdr.GetAddr2());
         NS_LOG_DEBUG("Beacon received from " << hdr.GetAddr2());
         m_assocManager->NotifyApInfo(std::move(apInfo));
@@ -2364,6 +2383,7 @@ StaWifiMac::CheckSupportedRates(std::variant<MgtBeaconHeader, MgtProbeResponseHe
             {
                 NS_LOG_DEBUG("Supported rates do not fit with the BSS membership selector");
                 NS_LOG_INFO("Supported rates do not fit with the BSS membership selector");
+
                 return false;
             }
         }
@@ -2751,7 +2771,7 @@ StaWifiMac::GetCapabilities(uint8_t linkId) const
 void
 StaWifiMac::SetState(MacState value)
 {
-    NS_LOG_FUNCTION(this);
+    NS_LOG_FUNCTION(this << value);
     
     m_state = value;
 }

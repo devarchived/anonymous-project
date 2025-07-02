@@ -74,10 +74,11 @@ WifiDefaultAssocManager::DoStartScanning()
 {
     NS_LOG_FUNCTION(this);
 
-    // if there are entries in the sorted list of AP information, reuse them and
-    // do not perform scanning
+    // // if there are entries in the sorted list of AP information, reuse them and
+    // // do not perform scanning
     if (!GetSortedList().empty())
     {
+        NS_LOG_INFO("Reusing the sorted list of AP information, not performing scanning");
         Simulator::ScheduleNow(&WifiDefaultAssocManager::EndScanning, this);
         return;
     }

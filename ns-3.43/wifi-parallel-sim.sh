@@ -2,7 +2,7 @@
 
 # Configurable parameters
 simulation_file="scratch/wifi-ehr-static-scenario/wifi-ehr-static-scenario.cc"
-reliabilityMode=true
+reliabilityMode=false
 printOutput=true
 errChannel=true
 poissonLambda=500

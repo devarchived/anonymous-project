@@ -617,7 +617,7 @@ main(int argc, char* argv[])
     bool switchAuxPhy{true};
     uint16_t auxPhyChWidth{20};
     bool auxPhyTxCapable{true};
-    dBm_u powSta{10.0};
+    dBm_u powSta{21.0};
     dBm_u powAp{21.0};
     dBm_u ccaEdTr{-62};
     dBm_u minimumRssi{-82};
@@ -626,7 +626,7 @@ main(int argc, char* argv[])
     std::string dlAckSeqType{"NO-OFDMA"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
     bool enableUlOfdma{false};
     bool enableBsrp{false};
-    int mcs{-1}; // -1 indicates an unset value
+    int mcs{11}; // -1 indicates an unset value
     uint32_t payloadSize =
         1474; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
     Time tputInterval{0}; // interval for detailed throughput measurement
@@ -1003,6 +1003,30 @@ main(int argc, char* argv[])
         phy.Set("RxSensitivity", DoubleValue(-92.0));
 
         apDevices.Add(wifi.Install(phy, mac, wifiApNodes.Get(i)));
+    }
+
+    Ptr<WifiNetDevice> staNetDev = staDevices.Get(0)->GetObject<WifiNetDevice>();
+    for (uint8_t linkId = 0; linkId < nLinks; linkId++)
+    {
+        Ptr<WifiPhy> phy = staNetDev->GetPhy(linkId);
+        double operatingFrequency = phy->GetFrequency()*1e6;
+        if (phy)
+        {
+            std::cout << "STA Link " << unsigned(linkId) << " frequency: " << operatingFrequency << " Hz" << std::endl;
+        }
+
+        if (findSubstring(channelStr[linkId],"5GHZ"))
+        {
+            lossModel5->SetFrequency(operatingFrequency);
+        }
+        else if (findSubstring(channelStr[linkId],"6GHZ"))
+        {
+            lossModel6->SetFrequency(operatingFrequency);
+        }
+        else if (findSubstring(channelStr[linkId],"2_4GHZ"))
+        {
+            lossModel2_4->SetFrequency(operatingFrequency);
+        }
     }
 
     // Install mobility

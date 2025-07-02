@@ -1,17 +1,24 @@
-# Read the file, sort the lines, and write back
-input_file = 'wifi-ehr-roaming-scenario/wifi-ehr-roaming-results-unsaturated-5-dB.txt'
-output_file = 'wifi-ehr-roaming-scenario/sorted-wifi-ehr-roaming-results-unsaturated-5-dB.txt'
+# Read the file and sort the lines
+input_files = [
+    'wifi-ehr-roaming-scenario/result-logs/wifi-ehr-roaming-results-unsaturated-3dB.txt',
+    'wifi-ehr-roaming-scenario/result-logs/wifi-ehr-roaming-results-unsaturated-3dB-reliability.txt',
+    'wifi-eht-roaming-scenario/result-logs/wifi-eht-roaming-results-unsaturated-3dB.txt',
+    # Add more input files as needed
+]
 
-with open(input_file, 'r') as f:
-    lines = f.readlines()
+for input_file in input_files:
+    parts = input_file.rsplit('/', 1)
+    output_file = f"{parts[0]}/sorted-{parts[1]}" if len(parts) > 1 else f"sorted-{input_file}"
 
-# Sort lines by first column, then second column (as integers)
-sorted_lines = sorted(
-    lines,
-    key=lambda line: (int(line.split(',')[1]), int(line.split(',')[0]))
-)
+    with open(input_file, 'r') as f:
+        lines = f.readlines()
 
-with open(output_file, 'w') as f:
-    f.writelines(sorted_lines)
+    sorted_lines = sorted(
+        lines,
+        key=lambda line: (int(line.split(',')[1]), int(line.split(',')[0]))
+    )
 
-print(f"Sorted data saved to {output_file}")
+    with open(output_file, 'w') as f:
+        f.writelines(sorted_lines)
+
+    print(f"Sorted data saved to {output_file}")

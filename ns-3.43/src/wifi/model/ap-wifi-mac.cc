@@ -1685,6 +1685,8 @@ void
 ApWifiMac::TxFailed(WifiMacDropReason timeoutReason, Ptr<const WifiMpdu> mpdu)
 {
     NS_LOG_FUNCTION(this << +timeoutReason << *mpdu);
+    auto p = mpdu->GetProtocolDataUnit();
+    NS_LOG_INFO("TxFailed p: " << p->GetUid());
     const WifiMacHeader& hdr = mpdu->GetHeader();
 
     if (hdr.IsAssocResp() || hdr.IsReassocResp())

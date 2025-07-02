@@ -1394,6 +1394,7 @@ HtFrameExchangeManager::MissedBlockAck(Ptr<WifiPsdu> psdu,
         // we have to send a BlockAckReq, if needed
         if (GetBaManager(tid)->NeedBarRetransmission(tid, recipientMld))
         {
+            NS_LOG_INFO("Missed Block Ack, transmit a BlockAckReq");
             NS_LOG_DEBUG("Missed Block Ack, transmit a BlockAckReq");
             /**
              * The BlockAckReq must be sent on the same link as the data frames to avoid issues.
@@ -1419,6 +1420,7 @@ HtFrameExchangeManager::MissedBlockAck(Ptr<WifiPsdu> psdu,
         }
         else
         {
+            NS_LOG_INFO("Missed Block Ack, do not transmit a BlockAckReq");
             NS_LOG_DEBUG("Missed Block Ack, do not transmit a BlockAckReq");
             // if a BA agreement exists, we can get here if there is no outstanding
             // MPDU whose lifetime has not expired yet.
@@ -1445,7 +1447,6 @@ HtFrameExchangeManager::MissedBlockAck(Ptr<WifiPsdu> psdu,
         {
             NS_LOG_DEBUG("Missed Block Ack, do not retransmit the data frames");
             NS_LOG_INFO("Missed Block Ack, do not retransmit the data frames");
-            std::cout << "tolol1" << std::endl;
             GetWifiRemoteStationManager()->ReportFinalDataFailed(*psdu->begin());
             for (const auto& mpdu : *PeekPointer(psdu))
             {
@@ -1458,7 +1459,6 @@ HtFrameExchangeManager::MissedBlockAck(Ptr<WifiPsdu> psdu,
         {
             NS_LOG_DEBUG("Missed Block Ack, retransmit data frames");
             NS_LOG_INFO("Missed Block Ack, retransmit data frames");
-            std::cout << "tolol2" << std::endl;
             GetBaManager(tid)->NotifyMissedBlockAck(m_linkId, recipientMld, tid);
             resetCw = false;
         }
