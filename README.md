@@ -1,35 +1,87 @@
 # WiFi8-Joint-Transmission
 
-This is **_ns-3-allinone_**, a repository with some scripts to download
-and build the core components around the 
-[ns-3 network simulator](https://www.nsnam.org).
-More information about this can be found in the
-[ns-3 tutorial](https://www.nsnam.org/documentation/).
+# Wi-Fi 8 Joint Transmission Simulation Guide
 
-If you have downloaded this in tarball release format, this directory
-contains some released ns-3 version, along with the repository for
-the [NetAnim network animator](https://gitlab.com/nsnam/netanim/).
-In this case, just run the script `build.py`, which attempts to build 
-NetAnim (if dependencies are met) and then ns-3 itself.
-If you want to build ns-3 examples and tests (a full ns-3 build),
-instead type:
-```
-./build.py --enable-examples --enable-tests
-```
-or you can simply enter into the ns-3 directory directly and use the
-build tools therein (see the tutorial).
+This project provides automation scripts and analysis tools for simulating static and roaming STA scenarios using ns-3.43, with support for both **EHT** and **EHR** standards.
 
-This directory also contains the [bake build tool](https://www.gitlab.com/nsnam/bake/), which allows access to
-other extensions of ns-3, including the Direct Code Execution environment,
-BRITE, click and openflow extensions for ns-3.  Consult the ns-3 tutorial
-on how to use bake to access optional ns-3 components.
+---
 
-If you have downloaded this from Git, the `download.py` script can be used to
-download bake, netanim, and ns-3-dev.  The usage to use
-basic ns-3 (netanim and ns-3-dev) is to type:
-```
-./download.py
-./build.py --enable-examples --enable-tests
-```
-and change directory to ns-3-dev for further work.
+## 📁 Directory Structure
+
+- All simulation shell scripts for automation are located in:  
+  `Wi-Fi8-Joint-Transmission/ns-3.43/`
+  
+- All analysis scripts are located in:  
+  `Wi-Fi8-Joint-Transmission/ns-3.43/scratch/Analysis/`
+  
+- Graph/map plotting scripts are in:  
+  `Wi-Fi8-Joint-Transmission/ns-3.43/scratch/Graphs/`
+
+---
+
+## ⚙️ 0. Run Simulation Scenarios with Shell Scripts
+
+### a. Static STA
+
+- **EHT**: `wifi-eht-parallel-sim.sh`  
+- **EHR**: `wifi-parallel-sim.sh`
+
+### b. Roaming STA
+
+- **EHT**: `wifi-eht-roaming-parallel-sim.sh`  
+- **EHR**: `wifi-eht-parallel-sim.sh`
+
+---
+
+## 📈 1. Plot Static STA Scenario Results
+
+Navigate to `scratch/Analysis/`:
+
+### a. Without Channel Error
+
+- **EHT & EHR**: `wifi-queue-combi-master.py`
+
+### b. With Channel Error
+
+- **EHT**: `wifi-multi-queue-error-master-revised.py`  
+- **EHR**: `wifi-queue-combi-error-master.py`
+
+---
+
+## 📊 2. Plot Roaming STA Scenario Results
+
+Navigate to `scratch/Analysis/`:
+
+### a. With Increasing Missed Beacons
+
+- **EHT**: `wifi-eht-roaming-plot.py`  
+- **EHR**: `wifi-ehr-roaming-plot.py`
+
+### b. With Wall Pathloss Variations
+
+- **EHT**: `wifi-eht-roaming-wall-loss-plot.py`  
+- **EHR**: `wifi-ehr-roaming-wall-loss-plot.py`
+
+---
+
+## 🗺️ 3. Plot Roaming STA Maps
+
+Navigate to `scratch/Graphs/`:
+
+### a. Association Maps
+
+- **EHT**: `indoor-eht-sequential-walk-scenario-assoc-map.py`  
+- **EHR**: `indoor-ehr-sequential-walk-scenario-assoc-map.py`
+
+### b. Heatmaps
+
+- **EHT**: `indoor-eht-sequential-walk-scenario-heatmap.py`  
+- **EHR**: `indoor-ehr-sequential-walk-scenario-heatmap.py`
+
+---
+
+## 📝 Notes
+
+- Ensure all Python scripts are run in the appropriate environment with necessary dependencies.
+- Use `chmod +x <script>.sh` to make shell scripts executable.
 
