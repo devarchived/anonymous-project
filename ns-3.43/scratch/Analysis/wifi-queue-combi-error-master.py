@@ -756,7 +756,7 @@ def main():
         print(f"\nRunning scenario with p_error: {scenario}")
         
         bands = [
-            BandParameters(name="2.4 GHz", frequency=2.4, difs=37e-6, sifs=10e-6, n_obss=4, p_error=scenario["2.4 GHz"]),
+            BandParameters(name="2.4 GHz", frequency=2.4, difs=43e-6, sifs=16e-6, n_obss=4, p_error=scenario["2.4 GHz"]),
             BandParameters(name="5 GHz", frequency=5.0, difs=43e-6, sifs=16e-6, n_obss=4, p_error=scenario["5 GHz"]),
             BandParameters(name="6 GHz", frequency=6.0, difs=43e-6, sifs=16e-6, n_obss=4, p_error=scenario["6 GHz"])
         ]
@@ -780,13 +780,13 @@ def main():
     n_normal_links = n_links - n_error_links
     
     bands_mlo = [
-        # BandParameters(name="2.4 GHz", frequency=2.4, difs=37e-6, sifs=10e-6, n_obss=3, p_error=0.0),
+        # BandParameters(name="2.4 GHz", frequency=2.4, difs=43e-6, sifs=16e-6, n_obss=3, p_error=0.0),
         BandParameters(name="5 GHz", frequency=5.0, difs=43e-6, sifs=16e-6, n_obss=3, p_error=0.0),
         # BandParameters(name="6 GHz", frequency=6.0, difs=43e-6, sifs=16e-6, n_obss=1, p_error=0.0)
     ]
 
     bands_mlo_error = [
-        # BandParameters(name="2.4 GHz", frequency=2.4, difs=37e-6, sifs=10e-6, n_obss=3, p_error=0.0),
+        # BandParameters(name="2.4 GHz", frequency=2.4, difs=43e-6, sifs=16e-6, n_obss=3, p_error=0.0),
         # BandParameters(name="5 GHz", frequency=5.0, difs=43e-6, sifs=16e-6, n_obss=3, p_error=0.0),
         BandParameters(name="6 GHz", frequency=6.0, difs=43e-6, sifs=16e-6, n_obss=1, p_error=1.0)
     ]
@@ -1102,6 +1102,7 @@ def main():
     plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.ylim(0, 5)
+    plt.show()
     plt.legend(handles=[delay_box_label, delay_analysis[0]], loc='best')
    
 

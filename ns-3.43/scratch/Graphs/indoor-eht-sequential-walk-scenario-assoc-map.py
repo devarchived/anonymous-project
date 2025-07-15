@@ -37,7 +37,7 @@ ap_colors = {
 
 # --- CONFIG ---
 log_file = os.path.expanduser(
-    '~/Desktop/Workspace/ns-allinone-3.43/ns-3.43/scratch/wifi-eht-roaming-scenario/assoc-rxpower-logs/wifi-eht-roaming-assoc-unsaturated-beacons-4-wall-loss-0-seed-21.txt'
+    '~/Desktop/Workspace/ns-allinone-3.43/ns-3.43/scratch/wifi-eht-roaming-scenario/assoc-rxpower-logs/wifi-eht-roaming-assoc-unsaturated-beacons-9-wall-loss-9-seed-21.txt'
 )
 walls_file = os.path.expanduser(
     '~/Desktop/Workspace/ns-allinone-3.43/ns-3.43/scratch/wifi-ehr-roaming-scenario/walls-assignment.txt'

@@ -112,7 +112,7 @@ with open(waypoints_file, 'r') as f:
 
 # --- Parse log for association and RxPower ---
 log_file = os.path.expanduser(
-    '~/Desktop/Workspace/ns-allinone-3.43/ns-3.43/scratch/wifi-ehr-roaming-scenario/assoc-rxpower-logs/wifi-ehr-roaming-rxPower-unsaturated-beacons-4-wall-loss-0-seed-21.txt'
+    '~/Desktop/Workspace/ns-allinone-3.43/ns-3.43/scratch/wifi-ehr-roaming-scenario/assoc-rxpower-logs/wifi-ehr-roaming-rxPower-unsaturated-beacons-9-wall-loss-9-seed-21.txt'
 )
 base_name = os.path.basename(log_file)
 
@@ -178,7 +178,7 @@ for x, y, val, color in zip(heatmap_x, heatmap_y, heatmap_val, heatmap_color):
 sm = mpl.cm.ScalarMappable(cmap=cmap, norm=norm)
 sm.set_array([])
 cbar = plt.colorbar(sm, label='Max RxPower (dB)')
-cbar.ax.invert_yaxis()
+# cbar.ax.invert_yaxis()
 
 
 # Adjust layout

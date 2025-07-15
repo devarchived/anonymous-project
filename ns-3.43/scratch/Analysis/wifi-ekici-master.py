@@ -543,7 +543,7 @@ def main():
     }
     
     bands = [
-        BandParameters(name="2.4 GHz", frequency=2.4, difs=37e-6, sifs=10e-6, n_obss=4, p_error=0.0),
+        BandParameters(name="2.4 GHz", frequency=2.4, difs=43e-6, sifs=16e-6, n_obss=4, p_error=0.0),
         BandParameters(name="5 GHz", frequency=5.0, difs=43e-6, sifs=16e-6, n_obss=4, p_error=0.0),
         BandParameters(name="6 GHz", frequency=6.0, difs=43e-6, sifs=16e-6, n_obss=4, p_error=0.0)
     ]

@@ -177,7 +177,7 @@ for x, y, val, color in zip(heatmap_x, heatmap_y, heatmap_val, heatmap_color):
 sm = mpl.cm.ScalarMappable(cmap=cmap, norm=norm)
 sm.set_array([])
 cbar = plt.colorbar(sm, label='Max RxPower (dB)')
-cbar.ax.invert_yaxis()
+# cbar.ax.invert_yaxis()
 
 
 # Adjust layout

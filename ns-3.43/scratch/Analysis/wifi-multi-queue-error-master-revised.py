@@ -421,7 +421,7 @@ def main():
 
     # Define parameters for different bands
     bands = [
-        # BandParameters(name="2.4 GHz", frequency=2.4, difs=37e-6, sifs=10e-6, n_obss=3, p_error=0.0),
+        # BandParameters(name="2.4 GHz", frequency=2.4, difs=43e-6, sifs=16e-6, n_obss=3, p_error=0.0),
         # BandParameters(name="5 GHz", frequency=5.0, difs=43e-6, sifs=16e-6, n_obss=3, p_error=0.0),
         BandParameters(name="6 GHz", frequency=6.0, difs=43e-6, sifs=16e-6, n_obss=1, p_error=0.333)
     ]
@@ -527,6 +527,7 @@ def main():
     plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.ylim(0, 20)
+    plt.show()
     plt.legend(handles=[delay_box_label, delay_analysis[0]], loc='best')
     
     plot_filename_delay = f'../Graphs/frame-error-probability/ch-delay-{out_prefix}{reliability_str}-error.pdf'

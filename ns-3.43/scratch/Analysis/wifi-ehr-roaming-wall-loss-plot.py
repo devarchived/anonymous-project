@@ -33,7 +33,7 @@ def filter_extreme_values(metric_values, lower_percentile=5, upper_percentile=90
 def main():
     # %% Plotting across wallloss values for fixed maxMissedBeacons
     target_beacons = 4
-    input_files = glob.glob('../wifi-ehr-roaming-scenario/result-logs/sorted-wifi-ehr-roaming-results-unsaturated-*-dB.txt')
+    input_files = glob.glob('../wifi-ehr-roaming-scenario/result-logs/sorted-wifi-ehr-roaming-results-unsaturated-*-dB-reliability.txt')
 
     throughput_data = {}
     reliability_data = {}
@@ -93,6 +93,7 @@ def main():
         plt.grid(True, alpha=0.5)
         plt.tight_layout()
         plt.ylim(ylim)
+        plt.show()
         patch = mpatches.Patch(facecolor='skyblue', edgecolor='navy', label='WiFi 8 JT (ns-3 Simulation)')
         plt.legend(handles=[patch], loc='best')
 

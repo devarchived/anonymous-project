@@ -34,7 +34,7 @@ def main():
     # %% Plotting for Wifi 8
     
     # Read the data file
-    input_filename = '../wifi-ehr-roaming-scenario/result-logs/sorted-wifi-ehr-roaming-results-unsaturated-9-dB.txt'
+    input_filename = '../wifi-ehr-roaming-scenario/result-logs/sorted-wifi-ehr-roaming-results-unsaturated-9-dB-reliability.txt'
     
     # Generate input filename
     base_name = os.path.basename(input_filename)
@@ -188,6 +188,7 @@ def main():
     plt.grid(True, alpha=0.5)
     plt.tight_layout()
     plt.ylim(0, 10)
+    plt.show()
     plt.legend(handles=[assoc_count_box_label], loc='best')
     
     plot_filename_assoc_delay = f'../Graphs/{out_prefix}-roaming/assoc-count-{out_prefix}{reliability_str}-roaming-{db_part}.pdf'

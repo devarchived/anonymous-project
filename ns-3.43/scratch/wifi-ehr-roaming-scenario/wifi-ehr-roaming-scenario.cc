@@ -33,10 +33,12 @@
 #include <numeric>
 #include <random>
 #include <map>
+#include <unordered_map>
+#include <algorithm>
 
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE("WifiEhtRoamingScenario");
+NS_LOG_COMPONENT_DEFINE("WifiEhrRoamingScenario");
 
 bool 
 fileExists(const std::string& filename) 
@@ -55,6 +57,7 @@ static bool g_verbose = false;
 bool m_reliabilityMode = false;
 std::map<Mac48Address,Mac48Address>  m_apStaAddressMap;
 Mac48Address m_associated = Mac48Address();
+std::map<uint64_t,Mac48Address> m_linkAssociatedMap;
 NetDeviceContainer m_staDevices;
 
 std::unique_ptr<std::ofstream> m_outputFileAssoc;
@@ -62,6 +65,8 @@ std::unique_ptr<std::ofstream> m_outputFileRxPower;
 
 std::map<uint64_t,Time> m_appTxMap;
 uint64_t m_appTxPackets{0};
+
+uint16_t m_randomSampling = 100;
 
 typedef struct Analysis
 {
@@ -147,19 +152,6 @@ PrintGnuplottableBuildingListToFile(std::string filename)
 }
 
 void 
-MonitorPathLoss(uint32_t linkId, Ptr<IndoorBuildingsPropagationLossModel> lossModel, NodeContainer wifiAps, NodeContainer wifiStas) 
-{
-    for (uint32_t i = 0; i < wifiAps.GetN(); i++)
-    {
-        double lossAp = lossModel->GetLoss(wifiAps.Get(i)->GetObject<MobilityModel>(), wifiStas.Get(0)->GetObject<MobilityModel>());
-        NS_LOG_INFO("Loss AP " << i << " with linkId " << linkId << " using frequency " << lossModel->GetFrequency() << " : " << lossAp << " dB");
-    }
-
-    // Schedule the next callback
-    Simulator::Schedule(MilliSeconds(100), &MonitorPathLoss, linkId, lossModel, wifiAps, wifiStas);
-}
-
-void 
 MonitorAssoc(NodeContainer wifiStaNodes, NodeContainer wifiApNodes, bool printLogs)
 {
     if(printLogs)
@@ -170,33 +162,41 @@ MonitorAssoc(NodeContainer wifiStaNodes, NodeContainer wifiApNodes, bool printLo
         *m_outputFileRxPower << "New position: " << staPos.x << ":" << staPos.y << ":"  << staPos.z << "\n";
     }
 
-    if (m_associated != Mac48Address())
+    if(m_associated != Mac48Address())
     {
-        // Find the associated AP node by MAC address
-        for (uint32_t i = 0; i < wifiApNodes.GetN(); ++i)
+        for (const auto& entry : m_linkAssociatedMap)
         {
-            Ptr<NetDevice> dev = wifiApNodes.Get(i)->GetDevice(0);
-            if (dev->GetAddress() == m_associated)
+            uint8_t linkId = entry.first;
+            Mac48Address apMac = entry.second;
+            if (apMac != Mac48Address())
             {
-                Ptr<MobilityModel> mob = wifiApNodes.Get(i)->GetObject<MobilityModel>();
-                Vector pos = mob->GetPosition();
-
-                std::string apId = "Unknown";
-                if (pos.x == 5.0 && pos.y == 5.0 && pos.z == 3.0)
-                    apId = "AP1";
-                else if (pos.x == 15.0 && pos.y == 5.0 && pos.z == 3.0)
-                    apId = "AP2";
-                else if (pos.x == 15.0 && pos.y == 15.0 && pos.z == 3.0)
-                    apId = "AP3";
-                else if (pos.x == 5.0 && pos.y == 15.0 && pos.z == 3.0)
-                    apId = "AP4";
-
-                // std::cout << "STA is associated with " << apId << std::endl;
-                if(printLogs)
+                // Find the AP node by MAC address
+                for (uint32_t i = 0; i < wifiApNodes.GetN(); ++i)
                 {
-                    *m_outputFileAssoc << "STA is associated with " << apId << "\n";
+                    Ptr<NetDevice> dev = wifiApNodes.Get(i)->GetDevice(0);
+                    if (dev->GetAddress() == apMac)
+                    {
+                        Ptr<MobilityModel> mob = wifiApNodes.Get(i)->GetObject<MobilityModel>();
+                        Vector pos = mob->GetPosition();
+
+                        std::string apId = "Unknown";
+                        if (pos.x == 5.0 && pos.y == 5.0 && pos.z == 3.0)
+                            apId = "AP1";
+                        else if (pos.x == 15.0 && pos.y == 5.0 && pos.z == 3.0)
+                            apId = "AP2";
+                        else if (pos.x == 15.0 && pos.y == 15.0 && pos.z == 3.0)
+                            apId = "AP3";
+                        else if (pos.x == 5.0 && pos.y == 15.0 && pos.z == 3.0)
+                            apId = "AP4";
+
+                        // std::cout << "STA is associated with " << apId << std::endl;
+                        if(printLogs)
+                        {
+                            *m_outputFileAssoc << "STA is associated with " << apId << "\n";
+                        }
+                        break;
+                    }
                 }
-                break;
             }
         }
     }
@@ -208,43 +208,54 @@ MonitorAssoc(NodeContainer wifiStaNodes, NodeContainer wifiApNodes, bool printLo
             *m_outputFileAssoc << "STA is deassociated" << "\n";
         }
     }
+
     // Schedule the next callback
     Simulator::Schedule(MilliSeconds(1000), &MonitorAssoc, wifiStaNodes, wifiApNodes, printLogs);
 }
 
 void 
-MonitorRxPower(double txPower, uint32_t linkId, Ptr<IndoorBuildingsPropagationLossModel> lossModel, NodeContainer wifiAps, NodeContainer wifiStas, bool printLogs) 
+MonitorPathLoss(uint32_t apIndex, Ptr<IndoorBuildingsPropagationLossModel> lossModel, NodeContainer wifiAps, NodeContainer wifiStas) 
 {
     for (uint32_t i = 0; i < wifiAps.GetN(); i++)
     {
-        if(m_associated == wifiAps.Get(i)->GetDevice(0)->GetAddress())
+        double lossAp = lossModel->GetLoss(wifiAps.Get(i)->GetObject<MobilityModel>(), wifiStas.Get(0)->GetObject<MobilityModel>());
+        NS_LOG_INFO("Loss AP " << apIndex << " using frequency " << lossModel->GetFrequency() << " : " << lossAp << " dB");
+    }
+
+    // Schedule the next callback
+    Simulator::Schedule(MilliSeconds(100), &MonitorPathLoss, apIndex, lossModel, wifiAps, wifiStas);
+}
+
+void 
+MonitorRxPower(double txPower, Ptr<IndoorBuildingsPropagationLossModel> lossModel, NodeContainer wifiAps, NodeContainer wifiStas, bool printLogs) 
+{
+    for (uint32_t i = 0; i < wifiAps.GetN(); i++)
+    {
+        Ptr<NetDevice> dev = wifiAps.Get(i)->GetDevice(0);
+        Ptr<MobilityModel> mob = wifiAps.Get(i)->GetObject<MobilityModel>();
+        Vector pos = mob->GetPosition();
+
+        std::string apId = "Unknown";
+        if (pos.x == 5.0 && pos.y == 5.0 && pos.z == 3.0)
+            apId = "AP1";
+        else if (pos.x == 15.0 && pos.y == 5.0 && pos.z == 3.0)
+            apId = "AP2";
+        else if (pos.x == 15.0 && pos.y == 15.0 && pos.z == 3.0)
+            apId = "AP3";
+        else if (pos.x == 5.0 && pos.y == 15.0 && pos.z == 3.0)
+            apId = "AP4";
+
+        double rxPower = lossModel->DoCalcRxPower(txPower,wifiAps.Get(i)->GetObject<MobilityModel>(), wifiStas.Get(0)->GetObject<MobilityModel>());
+        NS_LOG_INFO("RxPower from " << apId << " using frequency " << lossModel->GetFrequency() << " : " << rxPower << " dB");
+        //std::cout << "RxPower from " << apId << " using frequency " << lossModel->GetFrequency() << " : " << rxPower << " dB" << std::endl;
+        if(printLogs)
         {
-            Ptr<NetDevice> dev = wifiAps.Get(i)->GetDevice(0);
-            Ptr<MobilityModel> mob = wifiAps.Get(i)->GetObject<MobilityModel>();
-            Vector pos = mob->GetPosition();
-
-            std::string apId = "Unknown";
-            if (pos.x == 5.0 && pos.y == 5.0 && pos.z == 3.0)
-                apId = "AP1";
-            else if (pos.x == 15.0 && pos.y == 5.0 && pos.z == 3.0)
-                apId = "AP2";
-            else if (pos.x == 15.0 && pos.y == 15.0 && pos.z == 3.0)
-                apId = "AP3";
-            else if (pos.x == 5.0 && pos.y == 15.0 && pos.z == 3.0)
-                apId = "AP4";
-
-            double rxPower = lossModel->DoCalcRxPower(txPower,wifiAps.Get(i)->GetObject<MobilityModel>(), wifiStas.Get(0)->GetObject<MobilityModel>());
-            NS_LOG_INFO("RxPower from AP with linkId" << linkId << " using frequency " << lossModel->GetFrequency() << " : " << rxPower << " dB");
-            //std::cout << "RxPower from AP with linkId" << linkId << " using frequency " << lossModel->GetFrequency() << " : " << rxPower << " dB" << std::endl;
-            if(printLogs)
-            {
-                *m_outputFileRxPower << "RxPower from " << apId << " with linkId " << linkId << " using frequency " << lossModel->GetFrequency() << " : " << rxPower << " dB" << "\n";
-            }
+            *m_outputFileRxPower << "RxPower from " << apId << " using frequency " << lossModel->GetFrequency() << " : " << rxPower << " dB" << "\n";
         }
     }
 
     // Schedule the next callback
-    Simulator::Schedule(MilliSeconds(1000), &MonitorRxPower, txPower, linkId, lossModel, wifiAps, wifiStas, printLogs);
+    Simulator::Schedule(MilliSeconds(1000), &MonitorRxPower, txPower, lossModel, wifiAps, wifiStas, printLogs);
 }
 
 std::vector<Vector> 
@@ -325,7 +336,8 @@ std::vector<std::vector<double>>
 AssignFrequenciesToAps(uint16_t numBss, 
                     std::vector<uint16_t>& numApsPerBss,
                     uint32_t seed, 
-                    std::vector<double> freqBands)
+                    std::vector<double> freqBands,
+                    bool randomAllAps)
 {
     std::vector<std::vector<double>> freqAssignment(numBss);
 
@@ -349,8 +361,15 @@ AssignFrequenciesToAps(uint16_t numBss,
             }
             else
             {
-                Ptr<UniformRandomVariable> rng = CreateObject<UniformRandomVariable>();
-                freq = randFreq[rand->GetInteger(0, randFreq.size() - 1)];
+                if (randomAllAps)
+                {
+                    Ptr<UniformRandomVariable> rng = CreateObject<UniformRandomVariable>();
+                    freq = randFreq[rand->GetInteger(0, randFreq.size() - 1)];
+                }
+                else
+                {
+                    freq = randFreq[1];
+                }
             }
             freqAssignment[i].push_back(freq);
         }
@@ -371,10 +390,12 @@ AssignFrequenciesToAps(uint16_t numBss,
 void
 AssocTrace(std::string context, Mac48Address staAddress, Mac48Address apAddress)
 {
-    if (m_associated == Mac48Address())
+    if (m_associated == Mac48Address() && 
+        std::all_of(m_linkAssociatedMap.begin(), m_linkAssociatedMap.end(),
+                [](const auto& entry) { return entry.second == Mac48Address(); }))
     {
         m_associated = apAddress;
-        std::cout << Simulator::Now().As(Time::S) << " STA is associated with " << apAddress << std::endl;
+        std::cout << Simulator::Now().As(Time::S) << " STA is associated" << std::endl;
 
         Analysis& staAnalysis = analysisMap[staAddress];
         
@@ -386,13 +407,17 @@ AssocTrace(std::string context, Mac48Address staAddress, Mac48Address apAddress)
 void
 LinkAssocTrace(std::string context, uint8_t linkId, Mac48Address apAdress)
 {
-    // std::cout << Simulator::Now().As(Time::S) << " STA link " << (int)linkId << " is associated with " << apAdress << std::endl;
+    std::cout << Simulator::Now().As(Time::S) << " STA link " << (int)linkId << " is associated with " << apAdress << std::endl;
+    m_linkAssociatedMap[linkId] = apAdress;
 }
 
 void
 DeAssocTrace(std::string context, Mac48Address staAddress, Mac48Address apAdress)
 {
-    if (m_associated != Mac48Address())
+
+    if (m_associated != Mac48Address() ||
+        std::any_of(m_linkAssociatedMap.begin(), m_linkAssociatedMap.end(),
+                [](const auto& entry) { return entry.second != Mac48Address(); }))
     {
         m_associated = Mac48Address();
         std::cout << Simulator::Now().As(Time::S) << " STA is deassociated" << std::endl;
@@ -407,23 +432,8 @@ DeAssocTrace(std::string context, Mac48Address staAddress, Mac48Address apAdress
 void
 LinkDeAssocTrace(std::string context, uint8_t linkId, Mac48Address apAdress)
 {
-    // std::cout << Simulator::Now().As(Time::S) << " STA link " << (int)linkId << " is deassociated with " << apAdress << std::endl;
-}
-
-void
-AppTxTrace(std::string context, Ptr<const Packet> p)
-{
-    uint64_t packetUid = p->GetUid();
-    if (g_verbose)
-    {
-        std::cout << Simulator::Now().As(Time::US) << " APP TX p: " << packetUid << std::endl;
-    }
-    
-    if (!m_reliabilityMode || m_appTxMap.find(packetUid) == m_appTxMap.end()) 
-    {
-        m_appTxMap[packetUid] = Simulator::Now();
-    }
-    m_appTxPackets++;
+    std::cout << Simulator::Now().As(Time::S) << " STA link " << (int)linkId << " is deassociated with " << apAdress << std::endl;
+    m_linkAssociatedMap[linkId] = Mac48Address();
 }
 
 /**
@@ -471,6 +481,22 @@ PhyTxTrace(std::string context, Ptr<const Packet> p, double txPowerW)
 }
 
 void
+AppTxTrace(std::string context, Ptr<const Packet> p)
+{
+    uint64_t packetUid = p->GetUid();
+    if (g_verbose)
+    {
+        std::cout << Simulator::Now().As(Time::US) << " APP TX p: " << packetUid << std::endl;
+    }
+    
+    if (!m_reliabilityMode || m_appTxMap.find(packetUid) == m_appTxMap.end()) 
+    {
+        m_appTxMap[packetUid] = Simulator::Now();
+    }
+    m_appTxPackets++;
+}
+
+void
 PhyRxTrace(std::string context, Ptr<const Packet> p)
 {
     WifiMacHeader hdr;
@@ -487,7 +513,7 @@ PhyRxTrace(std::string context, Ptr<const Packet> p)
                     uint64_t packetUid = p->GetUid();
                     if (g_verbose)
                     {
-                        std::cout << Simulator::Now().As(Time::US) << " PHY TX p: " << packetUid << std::endl;
+                        std::cout << Simulator::Now().As(Time::US) << " PHY RX p: " << packetUid << std::endl;
                     }
 
                     Analysis& staAnalysis = analysisMap[wifiStaDev->GetMac()->GetAddress()];
@@ -597,12 +623,12 @@ MacAckTrace(std::string context,Ptr<const WifiMpdu> mpdu)
                 }
 
                 Analysis& staAnalysis = analysisMap[wifiStaDev->GetMac()->GetAddress()];
-                        
+
                 if (!m_reliabilityMode || staAnalysis.macAckMap.find(packetUid) == staAnalysis.macAckMap.end()) 
                 {
                     staAnalysis.macAckMap[packetUid] = Simulator::Now();
                 }
-                staAnalysis.ackPackets++;
+                staAnalysis.ackPackets++;       
             }
         }
     }
@@ -797,8 +823,15 @@ CalculateChAccessDelay(uint64_t& chAccessCount, Time& sumChAccessDelay, const st
 void
 CalculateReliabilityE2EDelay(Time& sumDelay, const std::map<std::pair<uint64_t,Mac48Address>, Time>& txMap, const std::map<uint64_t, Time>& rxMap)
 {
+    uint64_t rxIndex = 0;
     for (const auto& rxPackets : rxMap)
     {
+        if (rxIndex % m_randomSampling != 0) 
+        { 
+            rxIndex++; 
+            continue; 
+        }
+
         uint64_t packetUid = rxPackets.first;
         Time rxTime = rxPackets.second;
         Time maxValidTxTime = Time::Min();
@@ -824,14 +857,22 @@ CalculateReliabilityE2EDelay(Time& sumDelay, const std::map<std::pair<uint64_t,M
             Time e2eDelay = rxTime - sumTxTime/txCount;
             sumDelay += e2eDelay;
         }
+        rxIndex++;
     }
 }
 
 void
 CalculateReliabilityChAccessDelay(uint64_t& chAccessCount, Time& sumChAccessDelay, const std::map<std::pair<uint64_t,Mac48Address>, Time>& txMap, const std::map<uint64_t, Time>& rxMap, const std::map<std::pair<uint64_t,Mac48Address>, Time>& chReqMap, const std::map<std::pair<uint64_t,Mac48Address>, Time>& chGrantedMap)
 {
+    uint64_t rxIndex = 0;
     for (const auto& rxPackets : rxMap)
     {
+        if (rxIndex % m_randomSampling != 0) 
+        { 
+            rxIndex++; 
+            continue; 
+        }
+
         uint64_t packetUid = rxPackets.first;
         Time rxTime = rxPackets.second;
         Time maxValidTxTime = Time::Min();
@@ -870,12 +911,16 @@ CalculateReliabilityChAccessDelay(uint64_t& chAccessCount, Time& sumChAccessDela
             }
         }
 
-        if (maxValidTxTime != Time::Min() && minChAccessTxTime != Time::Max())
+        if (maxValidTxTime != Time::Min() && minChAccessTxTime != Time::Max() && minChAccessTxTime.GetSeconds() < 1.0 && minChAccessTxTime.GetSeconds() > 0.0)
         {
             Time chAccessDelay = rxTime - maxValidTxTime + minChAccessTxTime;
-            // Time chAccessDelay = rxTime - sumTxTime/txCount;
             sumChAccessDelay += chAccessDelay;
         }
+        else
+        {
+            chAccessCount++;
+        }
+        rxIndex++;
     }
 }
 
@@ -946,17 +991,18 @@ int main(int argc, char *argv[])
     uint32_t seed = 75;    // Random seed
     Time simulationTime{"80"};//{"100s"};
     uint16_t numBss = 1;
+    uint16_t randomSampling = 100;
     std::vector<uint16_t> numApsPerBss = {4};
-    std::string currentDir = "./scratch/wifi-eht-roaming-scenario/";
+    std::string currentDir = "./scratch/wifi-ehr-roaming-scenario/";
     std::string roomLayoutDir = currentDir + "walls-assignment.txt";
     std::string apLayoutDir = currentDir + "ap-positions.txt";
     std::string waypointDir = currentDir + "random-human-waypoints.txt";//"random-human-waypoints.txt";
 
-    // create a grid of buildings
+    // Building parameters
     double factorySizeX = 20; // m
     double factorySizeY = 20;  // m
     double factoryHeight = 3; // m
-    double wallLoss = 5; // dB
+    double wallLoss = 9; // dB
 
     // Wifi Simulation Parameters
     bool udp{true};
@@ -965,7 +1011,6 @@ int main(int argc, char *argv[])
     bool frameAggregation{false};
     bool use80Plus80{false};
     uint16_t mpduBufferSize{1024};
-    std::string emlsrLinks;//="0,1,2";
     std::vector<double> freqBands = {2.4,5,6};//{2.4,5,6};
     uint16_t paddingDelayUsec{32};
     uint16_t transitionDelayUsec{128};
@@ -973,13 +1018,13 @@ int main(int argc, char *argv[])
     bool switchAuxPhy{true};
     uint16_t auxPhyChWidth{20};
     bool auxPhyTxCapable{true};
-    dBm_u powSta{10.0};
+    dBm_u powSta{21.0};
     dBm_u powAp{21.0};
     dBm_u ccaEdTr{-62};
-    dBm_u minimumRssi{-82};
+    dBm_u minimumRssi{-101};
     int channelWidth = 20;
     int gi = 3200;
-    std::string dlAckSeqType{"NO-OFDMA"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
+    std::string dlAckSeqType{"ACK-SU-FORMAT"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
     bool enableUlOfdma{false};
     bool enableBsrp{false};
     int mcs{-1}; // -1 indicates an unset value
@@ -991,9 +1036,12 @@ int main(int argc, char *argv[])
     double maxExpectedThroughput{0};
     Time accessReqInterval{0};
     uint32_t maxMissedBeacons = 3;
+    bool enableMultiApCoordinationMaster = true;
+    bool reliabilityModeMaster = false;
     bool enablePoisson = true;
     bool printOutput = false;
     bool printLogs = false;
+    bool randomAllAps = false;
     bool isSaturated = false;
 
     CommandLine cmd(__FILE__);
@@ -1050,6 +1098,12 @@ int main(int argc, char *argv[])
     cmd.AddValue("maxExpectedThroughput",
                  "if set, simulation fails if the highest throughput is above this value",
                  maxExpectedThroughput);
+    cmd.AddValue("enableMultiApCoordination",
+                 "Enable WiFi-8 Multi AP Coordination",
+                 enableMultiApCoordinationMaster);
+    cmd.AddValue("reliabilityMode",
+                 "Enable WiFi-8 reliability mode",
+                 reliabilityModeMaster);
     cmd.AddValue("frameAggregation",
                 "Enable frame aggregation",
                 frameAggregation);
@@ -1059,6 +1113,9 @@ int main(int argc, char *argv[])
     cmd.AddValue("printOutput",
                 "Print results to file",
                 printOutput);
+    cmd.AddValue("randomAllAps",
+                "Randomize the frequency assignment for all APs",
+                randomAllAps);
     cmd.AddValue("poissonLambda",
                 "Arrival rate of the poisson traffic",
                 poissonLambda);
@@ -1073,28 +1130,37 @@ int main(int argc, char *argv[])
                 seed);
     cmd.Parse(argc, argv);
 
-    LogComponentEnable("WifiEhtRoamingScenario", LOG_LEVEL_FUNCTION);
+    LogComponentEnable("WifiEhrRoamingScenario", LOG_LEVEL_FUNCTION);
 
     RngSeedManager::SetSeed(seed);
 
+    m_randomSampling = randomSampling;
+    
     std::string outputFileNameAssoc;
     std::string outputFileNameRxPower;
     if(printLogs)
     {
         if (!isSaturated)
         {
-            outputFileNameAssoc = currentDir + "/assoc-rxpower-logs/wifi-eht-roaming-assoc-unsaturated-beacons-" + std::to_string(maxMissedBeacons) + "-wall-loss-" + std::to_string((int)wallLoss) + "-seed-" + std::to_string(seed);
-            outputFileNameRxPower = currentDir + "/assoc-rxpower-logs/wifi-eht-roaming-rxPower-unsaturated-beacons-" + std::to_string(maxMissedBeacons) + "-wall-loss-" + std::to_string((int)wallLoss) + "-seed-" + std::to_string(seed);
+            outputFileNameAssoc = currentDir + "/assoc-rxpower-logs/wifi-ehr-roaming-assoc-unsaturated-beacons-" + std::to_string(maxMissedBeacons) + "-wall-loss-" + std::to_string((int)wallLoss) + "-seed-" + std::to_string(seed);
+            outputFileNameRxPower = currentDir + "/assoc-rxpower-logs/wifi-ehr-roaming-rxPower-unsaturated-beacons-" + std::to_string(maxMissedBeacons) + "-wall-loss-" + std::to_string((int)wallLoss) + "-seed-" + std::to_string(seed);
         }
         else
         {
-            outputFileNameAssoc = currentDir + "/assoc-rxpower-logs/wifi-eht-roaming-assoc-beacons" + std::to_string(maxMissedBeacons) + "-wall-loss-" + std::to_string((int)wallLoss) + "-seed-" + std::to_string(seed);
-            outputFileNameRxPower = currentDir + "/assoc-rxpower-logs/wifi-eht-roaming-rxPower-beacons" + std::to_string(maxMissedBeacons) + "-wall-loss-" + std::to_string((int)wallLoss) + "-seed-" + std::to_string(seed);
+            outputFileNameAssoc = currentDir + "/assoc-rxpower-logs/wifi-ehr-roaming-assoc-beacons" + std::to_string(maxMissedBeacons) + "-wall-loss-" + std::to_string((int)wallLoss) + "-seed-" + std::to_string(seed);
+            outputFileNameRxPower = currentDir + "/assoc-rxpower-logs/wifi-ehr-roaming-rxPower-beacons" + std::to_string(maxMissedBeacons) + "-wall-loss-" + std::to_string((int)wallLoss) + "-seed-" + std::to_string(seed);
         }
         
-        outputFileNameAssoc += ".txt";
-        outputFileNameRxPower += ".txt";
-
+        if (reliabilityModeMaster)
+        {
+            outputFileNameAssoc += "-reliability.txt";
+            outputFileNameRxPower += "-reliability.txt";
+        }
+        else
+        {
+            outputFileNameAssoc += ".txt";
+            outputFileNameRxPower += ".txt";
+        }
         m_outputFileAssoc = std::make_unique<std::ofstream>();
         m_outputFileAssoc->open(outputFileNameAssoc, std::ios_base::app);
         m_outputFileRxPower = std::make_unique<std::ofstream>();
@@ -1129,6 +1195,19 @@ int main(int argc, char *argv[])
     }
 
     double prevThroughput[12] = {0};
+    
+    std::vector<bool> enableMultiApCoordination(numBss); 
+    for (uint16_t i = 0; i < numBss; i++)
+    {
+        enableMultiApCoordination[i] = enableMultiApCoordinationMaster;
+    }
+
+    std::vector<bool> reliabilityMode(numBss);
+    for (uint16_t i = 0; i < numBss; i++)
+    {
+        reliabilityMode[i] = reliabilityModeMaster;
+    }
+    m_reliabilityMode = reliabilityModeMaster;
 
     Ptr<Factory> factory = CreateObject<Factory>();
     factory->SetBuildingType(Building::Office);
@@ -1150,10 +1229,13 @@ int main(int argc, char *argv[])
     uint16_t numAps = std::accumulate(numApsPerBss.begin(), numApsPerBss.end(), 0);
     wifiApNodes.Create(numAps);
 
+    // Assign random frequencies to APs
+    auto freqAssignment = AssignFrequenciesToAps(numBss, numApsPerBss, seed, freqBands, randomAllAps);
+
     bool has24GHz = false;
     for (uint16_t i = 0; i < wifiStaNodes.GetN(); i++)
     {
-        for (auto freq : freqBands)
+        for (auto freq : freqAssignment[i])
         {
             if (freq == 2.4) {
                 has24GHz = true;
@@ -1161,7 +1243,6 @@ int main(int argc, char *argv[])
             }
         }
     }
-
     uint16_t maxChannelWidth = (!has24GHz) ? 160 : 40;
     const auto is80Plus80 = (use80Plus80 && (channelWidth == 160));
     const std::string widthStr = is80Plus80 ? "80+80" : std::to_string(channelWidth);
@@ -1176,12 +1257,23 @@ int main(int argc, char *argv[])
     NetDeviceContainer staDevices;
 
     WifiMacHelper mac;
-    WifiHelper wifi;
+    std::vector<WifiHelper> wifiStas(wifiStaNodes.GetN());
+    std::vector<WifiHelper> wifiAps(wifiApNodes.GetN());
+    std::vector<std::array<std::string, 3>> channelStrStas(wifiStaNodes.GetN());
+    std::vector<std::array<std::string, 3>> channelStrAps(wifiApNodes.GetN());
+    std::vector<std::array<FrequencyRange, 3>> freqRangesSta(wifiStaNodes.GetN());
+    std::vector<std::array<FrequencyRange, 3>> freqRangesAps(wifiApNodes.GetN());
+    std::vector<uint8_t> nLinksSta(wifiStaNodes.GetN());
+    std::vector<uint8_t> nLinksAps(wifiApNodes.GetN());
 
-    wifi.SetStandard(WIFI_STANDARD_80211be);
-    std::array<std::string, 3> channelStr;
-    std::array<FrequencyRange, 3> freqRanges;
-    uint8_t nLinks = 0;
+    for (uint8_t i = 0; i < wifiStas.size(); i++)
+    {
+        wifiStas[i].SetStandard(WIFI_STANDARD_80211be);
+    }
+    for (uint8_t i = 0; i < wifiAps.size(); i++)
+    {
+        wifiAps[i].SetStandard(WIFI_STANDARD_80211be);
+    }
 
     std::string ctrlRateStr;
     std::string dataModeStr;
@@ -1192,112 +1284,207 @@ int main(int argc, char *argv[])
         nonHtRefRateMbps = EhtPhy::GetNonHtReferenceRate(mcs) / 1e6;  
     }
 
-    for (auto freq : freqBands)
+    for (uint16_t i = 0; i < wifiStaNodes.GetN(); i++)
     {
-        if (nLinks > 0 && freq == 0)
+        for (auto freq : freqAssignment[i])
         {
-            break;
-        }
-        if (freq == 6)
-        {
-            channelStr[nLinks] = "{1, " + segmentWidthStr + ", ";
-            channelStr[nLinks] += "BAND_6GHZ, 0}";
-            freqRanges[nLinks] = WIFI_SPECTRUM_6_GHZ;
-            Config::SetDefault("ns3::LogDistancePropagationLossModel::ReferenceLoss",
-                                DoubleValue(48));
-            if (mcs >= 0)
+            if ((nLinksSta[i] > 0 && freq == 0) || (nLinksSta[i] >=  freqBands.size()))
             {
-                wifi.SetRemoteStationManager(nLinks,
-                                            "ns3::ConstantRateWifiManager",
-                                            "DataMode",
-                                            StringValue(dataModeStr),
-                                            "ControlMode",
-                                            StringValue(dataModeStr));
+                break;
             }
-            else 
+            if (freq == 6)
             {
-                wifi.SetRemoteStationManager(nLinks,
-                                            "ns3::MinstrelHtWifiManager");
+                channelStrStas[i][nLinksSta[i]] = "{1, " + segmentWidthStr + ", ";
+                channelStrStas[i][nLinksSta[i]] += "BAND_6GHZ, 0}";
+                freqRangesSta[i][nLinksSta[i]] = WIFI_SPECTRUM_6_GHZ;
+                Config::SetDefault("ns3::LogDistancePropagationLossModel::ReferenceLoss",
+                                    DoubleValue(48));
+                if (mcs >= 0)
+                {
+                    wifiStas[i].SetRemoteStationManager(nLinksSta[i],
+                                                "ns3::ConstantRateWifiManager",
+                                                "DataMode",
+                                                StringValue(dataModeStr),
+                                                "ControlMode",
+                                                StringValue(dataModeStr));
+                }
+                else 
+                {
+                    wifiStas[i].SetRemoteStationManager(nLinksSta[i],
+                                                "ns3::MinstrelHtWifiManager");
+                }
             }
-        }
-        else if (freq == 5)
-        {
-            channelStr[nLinks] = "{36, " + segmentWidthStr + ", ";
-            channelStr[nLinks] += "BAND_5GHZ, 0}";
-            freqRanges[nLinks] = WIFI_SPECTRUM_5_GHZ;
-            if (mcs >= 0)
+            else if (freq == 5)
             {
-                ctrlRateStr = "OfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
-                wifi.SetRemoteStationManager(nLinks,
-                                            "ns3::ConstantRateWifiManager",
-                                            "DataMode",
-                                            StringValue(dataModeStr),
-                                            "ControlMode",
-                                            StringValue(dataModeStr));
+                channelStrStas[i][nLinksSta[i]] = "{36, " + segmentWidthStr + ", ";
+                channelStrStas[i][nLinksSta[i]] += "BAND_5GHZ, 0}";
+                freqRangesSta[i][nLinksSta[i]] = WIFI_SPECTRUM_5_GHZ;
+                if (mcs >= 0)
+                {
+                    ctrlRateStr = "OfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
+                    wifiStas[i].SetRemoteStationManager(nLinksSta[i],
+                                                "ns3::ConstantRateWifiManager",
+                                                "DataMode",
+                                                StringValue(dataModeStr),
+                                                "ControlMode",
+                                                StringValue(dataModeStr));
+                }
+                else 
+                {
+                    wifiStas[i].SetRemoteStationManager(nLinksSta[i],
+                                                "ns3::MinstrelHtWifiManager");
+                }
             }
-            else 
+            else if (freq == 2.4)
             {
-                wifi.SetRemoteStationManager(nLinks,
-                                            "ns3::MinstrelHtWifiManager");
+                channelStrStas[i][nLinksSta[i]] = "{1, " + segmentWidthStr + ", ";
+                channelStrStas[i][nLinksSta[i]] += "BAND_2_4GHZ, 0}";
+                freqRangesSta[i][nLinksSta[i]] = WIFI_SPECTRUM_2_4_GHZ;
+                Config::SetDefault("ns3::LogDistancePropagationLossModel::ReferenceLoss",
+                                    DoubleValue(40));
+                ctrlRateStr = "ErpOfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
+                if (mcs >= 0)
+                {
+                    ctrlRateStr = "OfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
+                    wifiStas[i].SetRemoteStationManager(nLinksSta[i],
+                                                "ns3::ConstantRateWifiManager",
+                                                "DataMode",
+                                                StringValue(dataModeStr),
+                                                "ControlMode",
+                                                StringValue(dataModeStr));
+                }
+                else 
+                {
+                    wifiStas[i].SetRemoteStationManager(nLinksSta[i],
+                                                "ns3::MinstrelHtWifiManager");
+                }
             }
-        }
-        else if (freq == 2.4)
-        {
-            channelStr[nLinks] = "{1, " + segmentWidthStr + ", ";
-            channelStr[nLinks] += "BAND_2_4GHZ, 0}";
-            freqRanges[nLinks] = WIFI_SPECTRUM_2_4_GHZ;
-            Config::SetDefault("ns3::LogDistancePropagationLossModel::ReferenceLoss",
-                                DoubleValue(40));
-            ctrlRateStr = "ErpOfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
-            if (mcs >= 0)
+            else
             {
-                ctrlRateStr = "OfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
-                wifi.SetRemoteStationManager(nLinks,
-                                            "ns3::ConstantRateWifiManager",
-                                            "DataMode",
-                                            StringValue(dataModeStr),
-                                            "ControlMode",
-                                            StringValue(dataModeStr));
+                NS_FATAL_ERROR("Wrong frequency value!");
             }
-            else 
-            {
-                wifi.SetRemoteStationManager(nLinks,
-                                            "ns3::MinstrelHtWifiManager");
-            }
-        }
-        else
-        {
-            NS_FATAL_ERROR("Wrong frequency value!");
-        }
 
-        if (is80Plus80)
-        {
-            channelStr[nLinks] += std::string(";") + channelStr[nLinks];
-        }
+            if (is80Plus80)
+            {
+                channelStrStas[i][nLinksSta[i]] += std::string(";") + channelStrStas[i][nLinksSta[i]];
+            }
 
-        nLinks++;
+            nLinksSta[i]++;
+        }
     }
 
-    // Check if multi-link is used!!
-    if (nLinks > 1 && !emlsrLinks.empty())
+    uint16_t it = 0;
+    for (uint16_t i = 0; i < numBss; i++)
     {
-        wifi.ConfigEhtOptions("EmlsrActivated", BooleanValue(true));
+        for (uint16_t j = 0; j < freqAssignment[i].size(); j++)
+        {
+            if (nLinksAps[it] > 0 && freqAssignment[i][j] == 0)
+            {
+                break;
+            }
+            if (freqAssignment[i][j] == 6)
+            {
+                channelStrAps[it][nLinksAps[it]] = "{1, " + segmentWidthStr + ", ";
+                channelStrAps[it][nLinksAps[it]] += "BAND_6GHZ, 0}";
+                freqRangesAps[it][nLinksAps[it]] = WIFI_SPECTRUM_6_GHZ;
+                Config::SetDefault("ns3::LogDistancePropagationLossModel::ReferenceLoss",
+                                    DoubleValue(48));
+                if (mcs >= 0)
+                {
+                    wifiAps[it].SetRemoteStationManager(nLinksAps[it],
+                                                "ns3::ConstantRateWifiManager",
+                                                "DataMode",
+                                                StringValue(dataModeStr),
+                                                "ControlMode",
+                                                StringValue(dataModeStr));
+                }
+                else 
+                {
+                    wifiAps[it].SetRemoteStationManager(nLinksAps[it],
+                                                "ns3::MinstrelHtWifiManager");
+                }
+            }
+            else if (freqAssignment[i][j] == 5)
+            {
+                channelStrAps[it][nLinksAps[it]] = "{36, " + segmentWidthStr + ", ";
+                channelStrAps[it][nLinksAps[it]] += "BAND_5GHZ, 0}";
+                freqRangesAps[it][nLinksAps[it]] = WIFI_SPECTRUM_5_GHZ;
+                if (mcs >= 0)
+                {
+                    ctrlRateStr = "OfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
+                    wifiAps[it].SetRemoteStationManager(nLinksAps[it],
+                                                "ns3::ConstantRateWifiManager",
+                                                "DataMode",
+                                                StringValue(dataModeStr),
+                                                "ControlMode",
+                                                StringValue(dataModeStr));
+                }
+                else 
+                {
+                    wifiAps[it].SetRemoteStationManager(nLinksAps[it],
+                                                "ns3::MinstrelHtWifiManager");
+                }
+            }
+            else if (freqAssignment[i][j] == 2.4)
+            {
+                channelStrAps[it][nLinksAps[it]] = "{1, " + segmentWidthStr + ", ";
+                channelStrAps[it][nLinksAps[it]] += "BAND_2_4GHZ, 0}";
+                freqRangesAps[it][nLinksAps[it]] = WIFI_SPECTRUM_2_4_GHZ;
+                Config::SetDefault("ns3::LogDistancePropagationLossModel::ReferenceLoss",
+                                    DoubleValue(40));
+                ctrlRateStr = "ErpOfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
+                if (mcs >= 0)
+                {
+                    ctrlRateStr = "OfdmRate" + std::to_string(nonHtRefRateMbps) + "Mbps";
+                    wifiAps[it].SetRemoteStationManager(nLinksAps[it],
+                                                "ns3::ConstantRateWifiManager",
+                                                "DataMode",
+                                                StringValue(dataModeStr),
+                                                "ControlMode",
+                                                StringValue(dataModeStr));
+                }
+                else 
+                {
+                    wifiAps[it].SetRemoteStationManager(nLinksAps[it],
+                                                "ns3::MinstrelHtWifiManager");
+                }
+            }
+            else
+            {
+                NS_FATAL_ERROR("Wrong frequency value!");
+            }
+
+            if (is80Plus80)
+            {
+                channelStrAps[it][nLinksAps[it]] += std::string(";") + channelStrAps[it][nLinksAps[it]];
+            }
+
+            nLinksAps[it]++;
+            it++;
+        }
+    }
+    
+    it = 0;
+    for (uint16_t i = 0; i < numBss; i++)
+    {
+        if (nLinksSta[i] > 1 && enableMultiApCoordination[i])
+        {
+            wifiStas[i].ConfigEhtOptions("EnableMultiApCoordination", BooleanValue(true));
+            for (uint16_t j = 0; j < freqAssignment[i].size(); j++)
+            {
+                wifiAps[it].ConfigEhtOptions("EnableMultiApCoordination", BooleanValue(true));
+                it++;
+            }
+        }
     }
 
-    // Setup the EMLSR manager!!!
-    mac.SetEmlsrManager("ns3::DefaultEmlsrManager",
-        "EmlsrLinkSet",
-        StringValue(emlsrLinks),
-        "EmlsrPaddingDelay",
-        TimeValue(MicroSeconds(paddingDelayUsec)),
-        "EmlsrTransitionDelay",
-        TimeValue(MicroSeconds(transitionDelayUsec)),
-        "SwitchAuxPhy",
-        BooleanValue(switchAuxPhy),
-        "AuxPhyTxCapable",
-        BooleanValue(auxPhyTxCapable),
-        "AuxPhyChannelWidth",
-        UintegerValue(auxPhyChWidth));
+    for (uint16_t i = 0; i < numBss; i++)
+    {
+        if(reliabilityMode[i])
+        {
+            wifiStas[i].ConfigEhtOptions("ReliabilityMode", BooleanValue(true));
+        }
+    }
 
     auto spectrumChannel5 = CreateObject<MultiModelSpectrumChannel>();
     auto spectrumChannel6 = CreateObject<MultiModelSpectrumChannel>();
@@ -1315,52 +1502,96 @@ int main(int argc, char *argv[])
     spectrumChannel6->AddPropagationLossModel(lossModel6);
     spectrumChannel2_4->AddPropagationLossModel(lossModel2_4);
 
-    Ssid ssid = Ssid("ns3-80211be");
-
-    SpectrumWifiPhyHelper phy(nLinks);
-    phy.SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
-    phy.Set("ChannelSwitchDelay", TimeValue(MicroSeconds(channelSwitchDelayUsec)));
-
-    // Sets up multiple link in the physical layer
-    for (uint8_t linkId = 0; linkId < nLinks; linkId++)
+    std::vector<SpectrumWifiPhyHelper> phyStas;
+    for (uint16_t i = 0; i < numBss; i++)
     {
-        phy.Set(linkId, "ChannelSettings", StringValue(channelStr[linkId]));
-        if (findSubstring(channelStr[linkId],"5GHZ"))
+        phyStas.emplace_back(nLinksSta[i]);
+    }
+    std::vector<SpectrumWifiPhyHelper> phyAps(wifiApNodes.GetN());
+
+    it = 0;
+    for (uint16_t i = 0; i < numBss; i++)
+    {
+        NS_LOG_INFO("Configuring BSS " << i+1 << " with " << numApsPerBss[i] << " APs");
+        
+        Ssid ssid = Ssid("ns3-80211bn-" + std::to_string(i+1));
+
+        phyStas[i].SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
+
+        // Sets up multiple link in the physical layer
+        for (uint8_t linkId = 0; linkId < nLinksSta[i]; linkId++)
         {
-            phy.AddChannel(spectrumChannel5, freqRanges[linkId]);
+            phyStas[i].Set(linkId, "ChannelSettings", StringValue(channelStrStas[i][linkId]));
+            if (findSubstring(channelStrStas[i][linkId],"5GHZ"))
+            {
+                phyStas[i].AddChannel(spectrumChannel5, freqRangesSta[i][linkId]);
+            }
+            else if (findSubstring(channelStrStas[i][linkId],"6GHZ"))
+            {
+                phyStas[i].AddChannel(spectrumChannel6, freqRangesSta[i][linkId]);
+            }
+            else if (findSubstring(channelStrStas[i][linkId],"2_4GHZ"))
+            {
+                phyStas[i].AddChannel(spectrumChannel2_4, freqRangesSta[i][linkId]);
+            }
         }
-        else if (findSubstring(channelStr[linkId],"6GHZ"))
+
+        phyStas[i].Set ("TxPowerStart", DoubleValue (powSta));
+        phyStas[i].Set ("TxPowerEnd", DoubleValue (powSta));
+        phyStas[i].Set ("TxPowerLevels", UintegerValue (1));
+        phyStas[i].Set("CcaEdThreshold", DoubleValue(ccaEdTr));
+        phyStas[i].Set("RxSensitivity", DoubleValue(minimumRssi));
+
+        mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid),
+                    "EnableMultiApCoordination",BooleanValue(enableMultiApCoordination[i]),
+                    "MaxMissedBeacons", UintegerValue(maxMissedBeacons));
+        staDevices.Add(wifiStas[i].Install(phyStas[i], mac, wifiStaNodes.Get(i)));
+
+        for (uint8_t linkId = 0; linkId < freqAssignment[i].size(); linkId++)
         {
-            phy.AddChannel(spectrumChannel6, freqRanges[linkId]);
-        }
-        else if (findSubstring(channelStr[linkId],"2_4GHZ"))
-        {
-            phy.AddChannel(spectrumChannel2_4, freqRanges[linkId]);
+            phyAps[it].SetPcapDataLinkType(WifiPhyHelper::DLT_IEEE802_11_RADIO);
+            for (uint8_t apLinkId = 0; apLinkId < nLinksAps[it]; apLinkId++)
+            {
+                phyAps[it].Set(apLinkId, "ChannelSettings", StringValue(channelStrAps[it][apLinkId]));
+                if (findSubstring(channelStrAps[it][apLinkId],"5GHZ"))
+                {
+                    phyAps[it].AddChannel(spectrumChannel5, freqRangesAps[it][apLinkId]);
+                }
+                else if (findSubstring(channelStrAps[it][apLinkId],"6GHZ"))
+                {
+                    phyAps[it].AddChannel(spectrumChannel6, freqRangesAps[it][apLinkId]);
+                }
+                else if (findSubstring(channelStrAps[it][apLinkId],"2_4GHZ"))
+                {
+                    phyAps[it].AddChannel(spectrumChannel2_4, freqRangesAps[it][apLinkId]);
+                }
+            }
+
+            phyAps[i].Set ("TxPowerStart", DoubleValue (powAp));
+            phyAps[i].Set ("TxPowerEnd", DoubleValue (powAp));
+            phyAps[i].Set ("TxPowerLevels", UintegerValue (1));
+            phyAps[i].Set("CcaEdThreshold", DoubleValue(ccaEdTr));
+            phyAps[i].Set("RxSensitivity", DoubleValue(-92.0));
+
+            if(!frameAggregation)
+            {
+                mac.SetType("ns3::ApWifiMac",
+                    "Ssid", SsidValue(ssid),
+                    "BE_MaxAmpduSize",UintegerValue(0), // Enable A-MPDU with the highest maximum size allowed by the standard);
+                    "BE_MaxAmsduSize",UintegerValue(0)); // Enable A-MSDU with the highest maximum size (in Bytes) allowed
+            }
+            else 
+            {
+                mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
+            }
+
+            apDevices.Add(wifiAps[it].Install(phyAps[it], mac, wifiApNodes.Get(it)));
+            it++;
         }
     }
 
-    phy.Set ("TxPowerStart", DoubleValue (powSta));
-    phy.Set ("TxPowerEnd", DoubleValue (powSta));
-    phy.Set ("TxPowerLevels", UintegerValue (1));
-    phy.Set("CcaEdThreshold", DoubleValue(ccaEdTr));
-    phy.Set("RxSensitivity", DoubleValue(-92.0));
-
-    mac.SetType("ns3::StaWifiMac", "Ssid", SsidValue(ssid),
-                "MaxMissedBeacons", UintegerValue(maxMissedBeacons));
-    staDevices.Add(wifi.Install(phy, mac, wifiStaNodes));
-
-    mac.SetType("ns3::ApWifiMac", "Ssid", SsidValue(ssid));
-
-    phy.Set ("TxPowerStart", DoubleValue (powAp));
-    phy.Set ("TxPowerEnd", DoubleValue (powAp));
-    phy.Set ("TxPowerLevels", UintegerValue (1));
-    phy.Set("CcaEdThreshold", DoubleValue(ccaEdTr));
-    phy.Set("RxSensitivity", DoubleValue(-92.0));
-
-    apDevices.Add(wifi.Install(phy, mac, wifiApNodes));
-
     Ptr<WifiNetDevice> staNetDev = staDevices.Get(0)->GetObject<WifiNetDevice>();
-    for (uint8_t linkId = 0; linkId < nLinks; linkId++)
+    for (uint8_t linkId = 0; linkId < nLinksSta[0]; linkId++)
     {
         Ptr<WifiPhy> phy = staNetDev->GetPhy(linkId);
         double operatingFrequency = phy->GetFrequency()*1e6;
@@ -1369,18 +1600,20 @@ int main(int argc, char *argv[])
             std::cout << "STA Link " << unsigned(linkId) << " frequency: " << operatingFrequency << " Hz" << std::endl;
         }
 
-        if (findSubstring(channelStr[linkId],"5GHZ"))
+        if (findSubstring(channelStrStas[0][linkId],"5GHZ"))
         {
             lossModel5->SetFrequency(operatingFrequency);
         }
-        else if (findSubstring(channelStr[linkId],"6GHZ"))
+        else if (findSubstring(channelStrStas[0][linkId],"6GHZ"))
         {
             lossModel6->SetFrequency(operatingFrequency);
         }
-        else if (findSubstring(channelStr[linkId],"2_4GHZ"))
+        else if (findSubstring(channelStrStas[0][linkId],"2_4GHZ"))
         {
             lossModel2_4->SetFrequency(operatingFrequency);
         }
+
+        m_linkAssociatedMap[linkId] = Mac48Address();
     }
 
     // Install mobility
@@ -1456,23 +1689,26 @@ int main(int argc, char *argv[])
     std::vector<ApplicationContainer> clientApps(numBss);
     
     std::vector<uint64_t> maxLoad(numBss);
+    it = 0;
     // Calculate maxLoad as
     for (uint16_t i = 0; i < numBss; i++)
     {
         if (mcs >= 0)
         {
-            // maxLoad[i] = nLinks * EhtPhy::GetDataRate(mcs, channelWidth, NanoSeconds(gi), 1);
             maxLoad[i] = EhtPhy::GetDataRate(mcs, channelWidth, NanoSeconds(gi), 1);
             std::cout << "Data rate BSS " << i+1 << " : " << EhtPhy::GetDataRate(mcs, channelWidth, NanoSeconds(gi), 1)/1e6 << " Mbit/s" << std::endl;
         }
         else
         {
-            // maxLoad[i] = nLinks * EhtPhy::GetDataRate(11, channelWidth, NanoSeconds(gi), 1);
             maxLoad[i] = EhtPhy::GetDataRate(11, channelWidth, NanoSeconds(gi), 1);
         }
 
         if (udp)
         {
+            if(reliabilityMode[i])
+            {
+                clientApps[i].EnableReliabilityMode();
+            }
             if(enablePoisson)
             {
                 clientApps[i].EnablePoissonTraffic();
@@ -1508,9 +1744,10 @@ int main(int argc, char *argv[])
         }
         client.SetAttribute("PacketSize", UintegerValue(payloadSize));
         
-        for (uint16_t it = 0; it < numApsPerBss[i]; it++)
-        {
+        for (uint8_t linkId = 0; linkId < freqAssignment[i].size(); linkId++)
+        {   
             clientApps[i].Add(client.Install(wifiApNodes.Get(it)));
+            it++;
         }
 
         clientApps[i].Start(Seconds(1.0));
@@ -1523,15 +1760,16 @@ int main(int argc, char *argv[])
         allRxBytes.emplace_back(1,0);
     }
 
+    it = 0;
     m_staDevices = staDevices;
     for (uint32_t i = 0; i < numBss; i++) 
     {
         Ptr<WifiNetDevice> wifiStaDev = DynamicCast<WifiNetDevice>(staDevices.Get(i));
-        Ptr<WifiNetDevice> wifiApDev;
-        for (uint16_t j = 0; j < numApsPerBss[i]; j++)
+        for (uint32_t j = 0; j < numApsPerBss[i]; j++) 
         {
-            wifiApDev = DynamicCast<WifiNetDevice>(apDevices.Get(j));
+            Ptr<WifiNetDevice> wifiApDev = DynamicCast<WifiNetDevice>(apDevices.Get(it));
             m_apStaAddressMap[wifiApDev->GetMac()->GetAddress()] = wifiStaDev->GetMac()->GetAddress();
+            it++;
         }
     }
 
@@ -1545,45 +1783,51 @@ int main(int argc, char *argv[])
     // Simulation clock
     Simulator::Schedule (MicroSeconds (100), &TimePasses);
 
+    // Simulator::Schedule (MilliSeconds (1050), &IndoorBuildingsPropagationLossModel::SetWallLoss, lossModel6, 5);
+    // Simulator::Schedule (MilliSeconds (1050), &IndoorBuildingsPropagationLossModel::SetWallLoss, lossModel5, 5);
+    // Simulator::Schedule (MilliSeconds (1050), &IndoorBuildingsPropagationLossModel::SetWallLoss, lossModel2_4, 5);
+    // Simulator::Schedule (MilliSeconds (1050), &FriisPropagationLossModel::SetMinLoss, lossModel6, 200);
+    // Simulator::Schedule (MilliSeconds (1050), &FriisPropagationLossModel::SetMinLoss, lossModel5, 200);
+    // Simulator::Schedule (MilliSeconds (1050), &FriisPropagationLossModel::SetMinLoss, lossModel2_4, 200);
+
     // // Schedule the pathloss calculation callback
-    // for (uint32_t linkId = 0; linkId < nLinks; linkId++)
+    // for (uint32_t i = 0; i < wifiApNodes.GetN(); i++)
     // {
-    //     if (findSubstring(channelStr[linkId],"5GHZ"))
+    //     if (findSubstring(channelStrAps[i][0],"5GHZ"))
     //     {
-    //         Simulator::Schedule(Seconds(0), &MonitorPathLoss, linkId, lossModel5, wifiApNodes, wifiStaNodes);
+    //         Simulator::Schedule(Seconds(0), &MonitorPathLoss, i, lossModel5, wifiApNodes.Get(i), wifiStaNodes);
     //     }
-    //     else if (findSubstring(channelStr[linkId],"6GHZ"))
+    //     else if (findSubstring(channelStrAps[i][0],"6GHZ"))
     //     {
             
-    //         Simulator::Schedule(Seconds(0), &MonitorPathLoss, linkId, lossModel6, wifiApNodes, wifiStaNodes);
+    //         Simulator::Schedule(Seconds(0), &MonitorPathLoss, i, lossModel6, wifiApNodes.Get(i), wifiStaNodes);
     //     }
-    //     else if (findSubstring(channelStr[linkId],"2_4GHZ"))
+    //     else if (findSubstring(channelStrAps[i][0],"2_4GHZ"))
     //     {
-    //         Simulator::Schedule(Seconds(0), &MonitorPathLoss, linkId, lossModel2_4, wifiApNodes, wifiStaNodes);
+    //         Simulator::Schedule(Seconds(0), &MonitorPathLoss, i, lossModel2_4, wifiApNodes.Get(i), wifiStaNodes);
     //     }
     // }
 
     // Schedule the rxPower calculation callback
     Simulator::Schedule(Seconds(0.5), &MonitorAssoc, wifiStaNodes, wifiApNodes, printLogs);
-    for (uint32_t linkId = 0; linkId < nLinks; linkId++)
+    for (uint32_t i = 0; i < wifiApNodes.GetN(); i++)
     {
-        
-        if (findSubstring(channelStr[linkId],"5GHZ"))
+        if (findSubstring(channelStrAps[i][0],"5GHZ"))
         {
-            Simulator::Schedule(Seconds(0.5), &MonitorRxPower, powAp, linkId, lossModel5, wifiApNodes, wifiStaNodes, printLogs);
+            Simulator::Schedule(Seconds(0.5), &MonitorRxPower, powAp, lossModel5, wifiApNodes.Get(i), wifiStaNodes, printLogs);
         }
-        else if (findSubstring(channelStr[linkId],"6GHZ"))
+        else if (findSubstring(channelStrAps[i][0],"6GHZ"))
         {
             
-            Simulator::Schedule(Seconds(0.5), &MonitorRxPower, powAp, linkId, lossModel6, wifiApNodes, wifiStaNodes, printLogs);
+            Simulator::Schedule(Seconds(0.5), &MonitorRxPower, powAp, lossModel6, wifiApNodes.Get(i), wifiStaNodes, printLogs);
         }
-        else if (findSubstring(channelStr[linkId],"2_4GHZ"))
+        else if (findSubstring(channelStrAps[i][0],"2_4GHZ"))
         {
-            Simulator::Schedule(Seconds(0.5), &MonitorRxPower, powAp, linkId, lossModel2_4, wifiApNodes, wifiStaNodes, printLogs);
+            Simulator::Schedule(Seconds(0.5), &MonitorRxPower, powAp, lossModel2_4, wifiApNodes.Get(i), wifiStaNodes, printLogs);
         }
     }
 
-    // Enable the traces
+    // // Enable the traces
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/NewAssoc", MakeCallback(&AssocTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/NewDeAssoc", MakeCallback(&DeAssocTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/LinkAssoc", MakeCallback(&LinkAssocTrace));
@@ -1614,6 +1858,7 @@ int main(int argc, char *argv[])
     Time sumChAccessDelay{"0s"};
     Time sumAssocDelay{"0s"};
 
+    it = 0;
     for (auto& [macAddresss, analysis] : analysisMap) 
     {
         for (auto mapIt = analysis.macAckMap.begin(); mapIt != analysis.macAckMap.end(); )
@@ -1629,40 +1874,69 @@ int main(int argc, char *argv[])
         }
 
         std::cout << "\n=== STA: " << macAddresss << " ===" << std::endl;
-
+        
         std::cout << "App Tx Packets : " << m_appTxMap.size() << std::endl;
-        std::cout << "Tx Packets : " << analysis.txPackets << std::endl;
+        std::cout << "Tx Packets : " << analysis.macTxMap.size() << std::endl;
         std::cout << "Phy Tx Packets : " << analysis.phyTxPackets << std::endl;
         std::cout << "Rx Packets : " << analysis.rxPackets << std::endl;
         std::cout << "Phy Rx Packets : " << analysis.phyRxPackets << std::endl;
         std::cout << "Ack Packets : " << analysis.macAckMap.size() << std::endl;
         std::cout << "Drop Packets : " << analysis.dropTxMap.size() << std::endl;
         std::cout << "Retransmitted Packets : " <<  analysis.retransmitTxMap.size()  << std::endl;
-        
+
         // Throughput
-        auto throughput = (double) (analysis.macRxMap.size() * 8 * payloadSize) / simulationTime.GetMicroSeconds();
+        double throughput;
+        throughput = (double) (analysis.macRxMap.size() * 8 * payloadSize) / simulationTime.GetMicroSeconds();
+        // if(reliabilityMode[it])
+        // {
+        //     throughput = (double) (analysis.macAckMap.size() * 8 * payloadSize) / simulationTime.GetMicroSeconds();
+        // }
+        // else
+        // {
+        //     throughput = (double) (analysis.macAckMap.size() * 8 * payloadSize) / simulationTime.GetMicroSeconds();
+        // }
         sumThroughput += throughput;
         
         //Reliability
         double reliability;
         double dropReliability;
         double txReliability;
-        txReliability = 1 - (double) analysis.retransmitTxMap.size()/std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());
-        dropReliability = (double) analysis.macRxMap.size()/analysis.macTxMap.size();
-        reliability = (double) analysis.macRxMap.size()/m_appTxMap.size();
-        
+        if(reliabilityMode[it])
+        {
+            auto firstTxCount = CalculateFirstTransmissionReliability(nLinksSta[it],analysis.retransmitTxMapReliability);
+            txReliability = 1 - (double) (analysis.retransmitTxMap.size()-firstTxCount)/ std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());
+            dropReliability = (double) analysis.macRxMap.size()/analysis.macTxMap.size();
+            reliability = (double) analysis.macRxMap.size()/m_appTxMap.size();
+            CalculateReliabilityChAccessDelay(analysis.chAccessCount, analysis.sumChAccessDelay, analysis.phyTxMapReliability, analysis.macAckMap, analysis.chReqTxMapReliability, analysis.chGrantedTxMapReliability);
+            CalculateReliabilityE2EDelay(analysis.sumDelay, analysis.macTxMapReliability, analysis.macAckMap);
+        }
+        else
+        {
+            txReliability = 1 - (double) analysis.retransmitTxMap.size()/std::min(analysis.phyTxMap.size(),analysis.macTxMap.size());
+            dropReliability = (double) analysis.macRxMap.size()/analysis.macTxMap.size();
+            reliability = (double) analysis.macRxMap.size()/m_appTxMap.size();
+            CalculateChAccessDelay(analysis.chAccessCount, analysis.sumChAccessDelay, analysis.phyTxMap, analysis.macAckMap, analysis.chReqTxMap, analysis.chGrantedTxMap);
+            CalculateE2EDelay(analysis.sumDelay, analysis.macTxMap, analysis.macAckMap);
+        }
         sumReliability += reliability;
         sumDropReliabilty += dropReliability;
         sumTxReliability += txReliability;
 
         //Delay
-        CalculateChAccessDelay(analysis.chAccessCount, analysis.sumChAccessDelay, analysis.phyTxMap, analysis.macAckMap, analysis.chReqTxMap, analysis.chGrantedTxMap);
-        CalculateE2EDelay(analysis.sumDelay, analysis.macTxMap, analysis.macAckMap);
-
-        analysis.avgChAccessDelay = analysis.sumChAccessDelay/(analysis.phyRxMap.size()-analysis.chAccessCount);
+        if(reliabilityMode[it])
+        {
+        analysis.avgChAccessDelay = analysis.sumChAccessDelay/((analysis.phyRxMap.size()-analysis.chAccessCount)/randomSampling);
         sumChAccessDelay += analysis.avgChAccessDelay;
-        analysis.avgDelay = analysis.sumDelay/analysis.macRxMap.size();
+        analysis.avgDelay = analysis.sumDelay/(analysis.macRxMap.size()/randomSampling);
         sumDelay += analysis.avgDelay;
+        }
+        else
+        {
+            analysis.avgChAccessDelay = analysis.sumChAccessDelay/(analysis.phyRxMap.size()-analysis.chAccessCount);
+            sumChAccessDelay += analysis.avgChAccessDelay;
+            analysis.avgDelay = analysis.sumDelay/analysis.macRxMap.size();
+            sumDelay += analysis.avgDelay;
+        }
 
         //Association and Deassociation Delay
         Time assocDelay{"0s"};
@@ -1688,6 +1962,7 @@ int main(int argc, char *argv[])
         std::cout << "Ch Access Delay: " << analysis.avgChAccessDelay.As(Time::MS) << std::endl;
         std::cout << "Association Count: " << analysis.assocCount << std::endl;
         std::cout << "Association Delay: " << assocDelay.As(Time::MS) << std::endl;
+        it++;
     }
 
     sumThroughput = sumThroughput/numBss;
@@ -1717,14 +1992,21 @@ int main(int argc, char *argv[])
         
         if (!isSaturated)
         {
-            outputFileName = currentDir + "/result-logs/wifi-eht-roaming-results-unsaturated-" + std::to_string((int)wallLoss) + "dB";
+            outputFileName = currentDir + "/result-logs/wifi-ehr-roaming-results-unsaturated-" + std::to_string((int)wallLoss) + "dB";
         }
         else
         {
             outputFileName = currentDir + "/result-logs/wifi-ehr-roaming-results-" + std::to_string((int)wallLoss) + "dB";
         }
-
-        outputFileName += ".txt";
+        
+        if (reliabilityModeMaster)
+        {
+            outputFileName += "-reliability.txt";
+        }
+        else
+        {
+            outputFileName += ".txt";
+        }
 
         if (!(fileExists(outputFileName)))
         {
@@ -1746,27 +2028,6 @@ int main(int argc, char *argv[])
         m_outputFileAssoc->close();
         m_outputFileRxPower->close();
     }
-
-    // std::cout << "\n=== Address book ===" << std::endl;
-    // for (uint32_t i = 0; i < wifiApNodes.GetN(); ++i)
-    // {
-    //     Ptr<Node> apNode = wifiApNodes.Get(i);
-    //     Ptr<WifiNetDevice> apDev = apNode->GetDevice(0)->GetObject<WifiNetDevice>();
-    //     Ptr<MobilityModel> mob = apNode->GetObject<MobilityModel>();
-    //     Vector pos = mob->GetPosition();
-
-    //     std::cout << "AP " << i
-    //             << " MAC: " << apDev->GetMac()->GetAddress()
-    //             << " Position: (" << pos.x << ", " << pos.y << ", " << pos.z << ")"
-    //             << std::endl;
-
-    //     for (uint8_t linkId = 0; linkId < apDev->GetMac()->GetNLinks(); ++linkId)
-    //     {
-    //         std::cout << "  Link " << unsigned(linkId)
-    //                 << " MAC: " << apDev->GetMac()->GetFrameExchangeManager(linkId)->GetAddress()
-    //                 << std::endl;
-    //     }
-    // }
 
     Simulator::Destroy();
 

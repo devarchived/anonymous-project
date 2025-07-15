@@ -189,6 +189,7 @@ def main():
     plt.grid(True, alpha=0.5)
     plt.tight_layout()
     plt.ylim(0, 10)
+    plt.show()
     plt.legend(handles=[assoc_count_box_label], loc='best')
     
     plot_filename_assoc_delay = f'../Graphs/{out_prefix}-roaming/assoc-count-{out_prefix}{reliability_str}-roaming-{db_part}.pdf'

@@ -93,6 +93,7 @@ def main():
         plt.grid(True, alpha=0.5)
         plt.tight_layout()
         plt.ylim(ylim)
+        plt.show()
         patch = mpatches.Patch(facecolor='skyblue', edgecolor='navy', label='WiFi 7 MLO-STR (ns-3 Simulation)')
         plt.legend(handles=[patch], loc='best')
 
