@@ -1717,11 +1717,11 @@ int main(int argc, char *argv[])
         
         if (!isSaturated)
         {
-            outputFileName = currentDir + "/result-logs/wifi-eht-roaming-results-unsaturated-" + std::to_string((int)wallLoss) + "dB";
+            outputFileName = currentDir + "/result-logs/wifi-eht-roaming-results-unsaturated-" + std::to_string((int)wallLoss) + "-dB";
         }
         else
         {
-            outputFileName = currentDir + "/result-logs/wifi-ehr-roaming-results-" + std::to_string((int)wallLoss) + "dB";
+            outputFileName = currentDir + "/result-logs/wifi-ehr-roaming-results-" + std::to_string((int)wallLoss) + "-dB";
         }
 
         outputFileName += ".txt";

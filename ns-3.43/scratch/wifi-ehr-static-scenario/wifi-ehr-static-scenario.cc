@@ -1435,7 +1435,7 @@ main(int argc, char* argv[])
 
     if (errChannel)
     {
-        double errStartTime = 1100;
+        double errStartTime = 1050;
         Ptr<UniformRandomVariable> errRng = CreateObject<UniformRandomVariable>();
         errRng->SetStream(seed);
         auto errInd = errRng->GetInteger(0, 2);
@@ -1681,7 +1681,7 @@ main(int argc, char* argv[])
             CalculateE2EDelay(analysis.sumDelay, analysis.macTxMap, analysis.macAckMap);
         }
         
-        if (errChannel && (reliability >= 0.9))
+        if (errChannel && (reliability <= 0.9))
         {
             reliability = 0;
             relErrorCount++;
@@ -1730,7 +1730,7 @@ main(int argc, char* argv[])
         
         if (!isSaturated)
         {
-            outputFileName = outputDir + "/wifi-ehr-results-unsaturated";
+            outputFileName = outputDir + "/wifi-ehr-results-unsaturated-" + std::to_string((int)poissonLambda);
         }
         else
         {

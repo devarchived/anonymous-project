@@ -1,8 +1,8 @@
 # Read the file and sort the lines
 input_files = [
-    'wifi-ehr-roaming-scenario/result-logs/wifi-ehr-roaming-results-unsaturated-0dB.txt',
-    'wifi-ehr-roaming-scenario/result-logs/wifi-ehr-roaming-results-unsaturated-0dB-reliability.txt',
-    'wifi-eht-roaming-scenario/result-logs/wifi-eht-roaming-results-unsaturated-3dB.txt',
+    'wifi-ehr-roaming-scenario/result-logs/wifi-ehr-roaming-results-unsaturated-5dB.txt',
+    'wifi-ehr-roaming-scenario/result-logs/wifi-ehr-roaming-results-unsaturated-5dB-reliability.txt',
+    'wifi-eht-roaming-scenario/result-logs/wifi-eht-roaming-results-unsaturated-5dB.txt',
     # Add more input files as needed
 ]
 

@@ -1237,7 +1237,7 @@ main(int argc, char* argv[])
 
         if (!isSaturated)
         {
-        outputFileName = outputDir + "/wifi-eht-results-unsaturated";
+        outputFileName = outputDir + "/wifi-eht-results-unsaturated-" + std::to_string((int)poissonLambda);
         }
         else
         {

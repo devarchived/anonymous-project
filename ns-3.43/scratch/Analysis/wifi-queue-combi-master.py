@@ -639,7 +639,7 @@ def main():
 
     # %% Plotting for Wifi 8
     # Read the data file
-    wifi_ehr_input_filename = '../wifi-ehr-static-scenario/wifi-ehr-results-unsaturated.txt'
+    wifi_ehr_input_filename = '../wifi-ehr-static-scenario/unsaturated-result-thesis/wifi-ehr-results-unsaturated-500.txt'
 
     base_name = os.path.basename(wifi_ehr_input_filename)
     out_prefix = 'wifi8' if 'ehr' in base_name else 'wifi7' if 'eht' in base_name else 'wifi'
@@ -742,7 +742,7 @@ def main():
 
     # %% Plotting for Wifi 8 reliability mode
     # Read the data file
-    wifi_ehr_rel_input_filename = '../wifi-ehr-static-scenario/wifi-ehr-results-unsaturated-reliability.txt'
+    wifi_ehr_rel_input_filename = '../wifi-ehr-static-scenario/unsaturated-result-thesis/wifi-ehr-results-unsaturated-reliability-500.txt'
 
     base_name = os.path.basename(wifi_ehr_rel_input_filename)
     out_prefix = 'wifi8' if 'ehr' in base_name else 'wifi7' if 'eht' in base_name else 'wifi'
@@ -845,7 +845,7 @@ def main():
 
     # %% Plotting for Wifi 7
     # Read the data file
-    wifi_eht_input_filename = '../wifi-eht-static-scenario/wifi-eht-results-unsaturated.txt'
+    wifi_eht_input_filename = '../wifi-eht-static-scenario/unsaturated-results-thesis/wifi-eht-results-unsaturated-500.txt'
 
     base_name = os.path.basename(wifi_eht_input_filename)
     out_prefix = 'wifi8' if 'ehr' in base_name else 'wifi7' if 'eht' in base_name else 'wifi'
@@ -941,7 +941,6 @@ def main():
     plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.ylim(0, 5)
-    plt.show()
     plt.legend(handles=[delay_box_label, delay_analysis[0]], loc='best')
      
     plot_filename_delay = f'../Graphs/traffic-rate/ch-delay-{out_prefix}{reliability_str}-poisson.pdf'

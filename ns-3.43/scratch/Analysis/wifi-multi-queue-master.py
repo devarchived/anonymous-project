@@ -400,7 +400,7 @@ def main():
 
     # %% Plotting for Wifi 7
     # Read the data file
-    wifi_eht = pd.read_csv('../wifi-eht-static-scenario/wifi-eht-results-unsaturated.txt', header=None, 
+    wifi_eht = pd.read_csv('../wifi-eht-static-scenario/unsaturated-results-thesis/wifi-eht-results-unsaturated-500.txt', header=None, 
                     names=['seedNumber', 'numBSS', 'Throughput', 'PacketDropReliability', 
                             'PacketReceivedReliability', 'EndToEndDelay', 'ChannelAccessDelay'])
 

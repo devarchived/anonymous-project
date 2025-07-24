@@ -431,7 +431,7 @@ def main():
 
     # %% Plotting for Wifi 7
     # Read the data file
-    wifi_eht_input_filename = '../wifi-eht-static-scenario/wifi-eht-results-unsaturated-error.txt'
+    wifi_eht_input_filename = '../wifi-eht-static-scenario/unsaturated-results-thesis/wifi-eht-results-unsaturated-error-500.txt'
 
     base_name = os.path.basename(wifi_eht_input_filename)
     out_prefix = 'wifi8' if 'ehr' in base_name else 'wifi7' if 'eht' in base_name else 'wifi'
@@ -527,7 +527,6 @@ def main():
     plt.xticks(n_obss_values)
     plt.tight_layout()
     plt.ylim(0, 20)
-    plt.show()
     plt.legend(handles=[delay_box_label, delay_analysis[0]], loc='best')
     
     plot_filename_delay = f'../Graphs/frame-error-probability/ch-delay-{out_prefix}{reliability_str}-error.pdf'
