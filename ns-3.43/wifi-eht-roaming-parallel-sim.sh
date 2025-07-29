@@ -4,7 +4,7 @@
 simulation_file="scratch/wifi-eht-roaming-scenario/wifi-eht-roaming-scenario.cc"
 printOutput=true
 poissonLambda=500
-wallLoss=3
+wallLoss=5
 
 # Function to run simulations for a given numBss
 run_simulations() {

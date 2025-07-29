@@ -33,6 +33,9 @@
 #include <numeric>
 #include <random>
 #include <map>
+#include <unordered_map>
+#include <algorithm>
+#include <iomanip>
 
 using namespace ns3;
 
@@ -59,6 +62,7 @@ NetDeviceContainer m_staDevices;
 
 std::unique_ptr<std::ofstream> m_outputFileAssoc;
 std::unique_ptr<std::ofstream> m_outputFileRxPower;
+std::unique_ptr<std::ofstream> m_outputFilePerformance;
 
 std::map<uint64_t,Time> m_appTxMap;
 uint64_t m_appTxPackets{0};
@@ -94,11 +98,16 @@ typedef struct Analysis
     Time avgDelay{"0s"};
     Time sumChAccessDelay{"0s"};
     Time avgChAccessDelay{"0s"};
+    Time sumDiscreteChAccessDelay{"0s"};
+    Time avgDiscreteChAccessDelay{"0s"};
     Time sumAssocTime{"0s"};
     Time sumDeAssocTime{"0s"};
 } Analysis;
  
 std::map<Mac48Address,Analysis> analysisMap;
+
+uint64_t m_prevMacRxPackets{0};
+uint64_t m_prevAppTxPackets{0};
 
 static void
 TimePasses ()
@@ -939,6 +948,51 @@ CalculateAllDropReliability(uint8_t numLinks, const std::map<std::pair<uint64_t,
     return numDrop;
 }
 
+void 
+LogMetricsEveryInterval(double interval, double simulationEndTime, std::string logFilePath, uint32_t payloadSize) 
+{
+    static double currentTime = interval;
+    if (analysisMap.empty()) 
+    {
+        return;
+    }
+
+    auto itAnalysis = analysisMap.begin();
+    Analysis& analysis = itAnalysis->second;
+    
+    // Throughput
+    double throughput = (double)((analysis.macRxMap.size()-m_prevMacRxPackets) * 8 * payloadSize) / (interval * 1e6);
+    
+    // Reliability
+    double reliability = (double)(analysis.macRxMap.size()-m_prevMacRxPackets) / (m_appTxMap.size() > 0 ? (m_appTxMap.size()-m_prevAppTxPackets) : 1);
+    
+    // Channel Access Dela
+    CalculateChAccessDelay(analysis.chAccessCount, analysis.sumDiscreteChAccessDelay, analysis.phyTxMap, analysis.macAckMap, analysis.chReqTxMap, analysis.chGrantedTxMap);
+    analysis.avgDiscreteChAccessDelay = analysis.sumChAccessDelay/(analysis.phyRxMap.size()-analysis.chAccessCount);
+    double chAccessDelay = analysis.avgDiscreteChAccessDelay.GetMilliSeconds();
+    
+    // Assoc Count
+    int assocCount = analysis.assocCount;
+    
+    *m_outputFilePerformance << std::fixed << std::setprecision(2)
+            << currentTime << ","
+            << throughput << ","
+            << reliability*100 << ","
+            << chAccessDelay << ","
+            << assocCount << "\n";
+    
+    // Update iteration
+    m_prevMacRxPackets = analysis.macRxMap.size();
+    m_prevAppTxPackets = m_appTxMap.size();
+    
+    // Schedule next call if not finished
+    currentTime += interval;
+    if (currentTime < simulationEndTime) 
+    {
+        Simulator::Schedule(Seconds(interval), &LogMetricsEveryInterval, interval, simulationEndTime, logFilePath, payloadSize);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     // Simulation parameters
@@ -982,7 +1036,7 @@ int main(int argc, char *argv[])
     std::string dlAckSeqType{"NO-OFDMA"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
     bool enableUlOfdma{false};
     bool enableBsrp{false};
-    int mcs{-1}; // -1 indicates an unset value
+    int mcs{3}; // -1 indicates an unset value
     uint32_t payloadSize =
         1474;//1474; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
     Time tputInterval{0}; // interval for detailed throughput measurement
@@ -1079,26 +1133,32 @@ int main(int argc, char *argv[])
 
     std::string outputFileNameAssoc;
     std::string outputFileNameRxPower;
+    std::string outputFileNamePerformance;
     if(printLogs)
     {
         if (!isSaturated)
         {
             outputFileNameAssoc = currentDir + "/assoc-rxpower-logs/wifi-eht-roaming-assoc-unsaturated-beacons-" + std::to_string(maxMissedBeacons) + "-wall-loss-" + std::to_string((int)wallLoss) + "-seed-" + std::to_string(seed);
             outputFileNameRxPower = currentDir + "/assoc-rxpower-logs/wifi-eht-roaming-rxPower-unsaturated-beacons-" + std::to_string(maxMissedBeacons) + "-wall-loss-" + std::to_string((int)wallLoss) + "-seed-" + std::to_string(seed);
+            outputFileNamePerformance = currentDir + "/assoc-rxpower-logs/wifi-eht-roaming-performance-unsaturated-beacons-" + std::to_string(maxMissedBeacons) + "-wall-loss-" + std::to_string((int)wallLoss) + "-seed-" + std::to_string(seed);
         }
         else
         {
             outputFileNameAssoc = currentDir + "/assoc-rxpower-logs/wifi-eht-roaming-assoc-beacons" + std::to_string(maxMissedBeacons) + "-wall-loss-" + std::to_string((int)wallLoss) + "-seed-" + std::to_string(seed);
             outputFileNameRxPower = currentDir + "/assoc-rxpower-logs/wifi-eht-roaming-rxPower-beacons" + std::to_string(maxMissedBeacons) + "-wall-loss-" + std::to_string((int)wallLoss) + "-seed-" + std::to_string(seed);
+            outputFileNamePerformance = currentDir + "/assoc-rxpower-logs/wifi-eht-roaming-performance-beacons-" + std::to_string(maxMissedBeacons) + "-wall-loss-" + std::to_string((int)wallLoss) + "-seed-" + std::to_string(seed);
         }
         
         outputFileNameAssoc += ".txt";
         outputFileNameRxPower += ".txt";
+        outputFileNamePerformance += ".txt";
 
         m_outputFileAssoc = std::make_unique<std::ofstream>();
         m_outputFileAssoc->open(outputFileNameAssoc, std::ios_base::app);
         m_outputFileRxPower = std::make_unique<std::ofstream>();
         m_outputFileRxPower->open(outputFileNameRxPower, std::ios_base::app);
+        m_outputFilePerformance = std::make_unique<std::ofstream>();
+        m_outputFilePerformance->open(outputFileNamePerformance, std::ios_base::app);
     }
 
     if (useRts)
@@ -1583,6 +1643,11 @@ int main(int argc, char *argv[])
         }
     }
 
+    if(printLogs)
+    {
+        Simulator::Schedule(Seconds(1.25), &LogMetricsEveryInterval, 0.25, simulationTime.GetSeconds(), outputFileNamePerformance, payloadSize);
+    }
+
     // Enable the traces
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/NewAssoc", MakeCallback(&AssocTrace));
     Config::Connect("/NodeList/*/DeviceList/*/$ns3::WifiNetDevice/Mac/NewDeAssoc", MakeCallback(&DeAssocTrace));
@@ -1745,6 +1810,7 @@ int main(int argc, char *argv[])
     {
         m_outputFileAssoc->close();
         m_outputFileRxPower->close();
+        m_outputFilePerformance->close();
     }
 
     // std::cout << "\n=== Address book ===" << std::endl;

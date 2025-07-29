@@ -41,7 +41,7 @@ ArpCache::GetTypeId()
                             .AddAttribute("DeadTimeout",
                                           "When this timeout expires, "
                                           "a new attempt to resolve the matching entry is made",
-                                          TimeValue(Seconds(100)),
+                                          TimeValue(Seconds(1000)),
                                           MakeTimeAccessor(&ArpCache::m_deadTimeout),
                                           MakeTimeChecker())
                             .AddAttribute("WaitReplyTimeout",
@@ -56,7 +56,7 @@ ArpCache::GetTypeId()
                             .AddAttribute("MaxRetries",
                                           "Number of retransmissions of ArpRequest "
                                           "before marking dead",
-                                          UintegerValue(10000),//(3),
+                                          UintegerValue(100000),//(3),
                                           MakeUintegerAccessor(&ArpCache::m_maxRetries),
                                           MakeUintegerChecker<uint32_t>())
                             .AddAttribute("PendingQueueSize",

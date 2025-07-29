@@ -2,10 +2,10 @@
 
 # Configurable parameters
 simulation_file="scratch/wifi-ehr-static-scenario/wifi-ehr-static-scenario.cc"
-reliabilityMode=false
+reliabilityMode=true
 printOutput=true
 errChannel=true
-poissonLambda=500
+poissonLambda=600
 
 # Function to run simulations for a given numBss
 run_simulations() {
@@ -19,8 +19,8 @@ run_simulations() {
 # Export the function so it can be used by parallel processes
 export -f run_simulations
 
-./ns3 clean
-./ns3 configure --disable-werror --enable-examples --build-profile=optimized
+# ./ns3 clean
+# ./ns3 configure --disable-werror --enable-examples --build-profile=optimized
 # ./ns3 build
 
 MAX_PARALLEL=1

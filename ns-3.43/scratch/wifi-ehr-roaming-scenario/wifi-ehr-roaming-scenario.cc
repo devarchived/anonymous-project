@@ -1078,7 +1078,7 @@ int main(int argc, char *argv[])
     bool switchAuxPhy{true};
     uint16_t auxPhyChWidth{20};
     bool auxPhyTxCapable{true};
-    dBm_u powSta{21.0};
+    dBm_u powSta{30.0};
     dBm_u powAp{21.0};
     dBm_u ccaEdTr{-62};
     dBm_u minimumRssi{-101};
@@ -1087,7 +1087,7 @@ int main(int argc, char *argv[])
     std::string dlAckSeqType{"ACK-SU-FORMAT"};//(NO-OFDMA, ACK-SU-FORMAT, MU-BAR or AGGR-MU-BAR)
     bool enableUlOfdma{false};
     bool enableBsrp{false};
-    int mcs{-1}; // -1 indicates an unset value
+    int mcs{3}; // -1 indicates an unset value
     uint32_t payloadSize =
         1474;//1474; // must fit in the max TX duration when transmitting at MCS 0 over an RU of 26 tones
     Time tputInterval{0}; // interval for detailed throughput measurement

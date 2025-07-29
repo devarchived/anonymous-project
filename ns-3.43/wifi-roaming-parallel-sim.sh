@@ -5,7 +5,7 @@ simulation_file="scratch/wifi-ehr-roaming-scenario/wifi-ehr-roaming-scenario.cc"
 reliabilityMode=true
 printOutput=true
 poissonLambda=500
-wallLoss=3
+wallLoss=5
 
 # Function to run simulations for a given numBss
 run_simulations() {
@@ -23,7 +23,7 @@ export -f run_simulations
 # ./ns3 configure --disable-werror --enable-examples --build-profile=optimized
 # ./ns3 build
 
-MAX_PARALLEL=7
+MAX_PARALLEL=10
 
 # Run simulations in parallel for numBss from 1 to 4
 for maxMissedBeacons in {1..10}; do

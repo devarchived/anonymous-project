@@ -1227,6 +1227,7 @@ WifiRemoteStationManager::GetUseNonHtProtection() const
 bool
 WifiRemoteStationManager::NeedRetransmission(Ptr<const WifiMpdu> mpdu)
 {
+    
     NS_LOG_FUNCTION(this << *mpdu);
     NS_ASSERT(!mpdu->GetHeader().GetAddr1().IsGroup());
     AcIndex ac =
