@@ -1,6 +1,4 @@
-# WiFi8-Joint-Transmission
-
-## Wi-Fi 8 Joint Transmission Directory Guide
+## Directory Guide
 
 This project provides automation scripts and analysis tools for simulating static and roaming STA scenarios using ns-3.43, with support for both **EHT** and **EHR** standards.
 
